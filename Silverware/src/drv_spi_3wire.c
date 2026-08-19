@@ -79,10 +79,11 @@ void mosi_output( void)
 
 #define READMOSI (SPI_MOSI_PORT->IDR & SPI_MOSI_PIN)
 
+#if defined(__CC_ARM)
 #pragma push
-
 #pragma Otime
 #pragma O2
+#endif
 
 void spi_cson( )
 {
@@ -227,7 +228,9 @@ for ( int i =7 ; i >=0 ; i--)
 }
 */
 
+#if defined(__CC_ARM)
 #pragma pop
+#endif
 
 #endif
 

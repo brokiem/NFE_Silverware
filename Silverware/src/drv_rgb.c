@@ -318,10 +318,11 @@ void rgb_init(void)
 #define RGBHIGH gpioset( RGB_PORT, RGB_PIN)
 #define RGBLOW gpioreset( RGB_PORT, RGB_PIN);
 
+#if defined(__CC_ARM)
 #pragma push
-
 #pragma Otime
 #pragma O2
+#endif
 
 void delay1a()
 {
@@ -367,7 +368,9 @@ for ( int i =23 ; i >=0 ; i--)
 		}
 	}
 }
+#if defined(__CC_ARM)
 #pragma pop
+#endif
 
 #endif
 

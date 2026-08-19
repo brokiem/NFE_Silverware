@@ -233,8 +233,10 @@
 // define logic - do not change
 ///////////////
 
+#if defined(__CC_ARM)
 #pragma diag_warning 1035 , 177 , 4017
 #pragma diag_error 260
+#endif
 
 //--fpmode=fast
 

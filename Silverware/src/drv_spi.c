@@ -45,10 +45,11 @@ void spi_init(void)
 //#define READMISO (GPIO_ReadInputDataBit(SPI_MISO_PORT, SPI_MISO_PIN) )
 #define READMISO (SPI_MISO_PORT->IDR & SPI_MISO_PIN)
 
+#if defined(__CC_ARM)
 #pragma push
-
 #pragma Otime
 #pragma O2
+#endif
 
 void spi_cson( )
 {
@@ -152,7 +153,9 @@ int spi_sendrecvbyte2( int data)
 }
 
 
+#if defined(__CC_ARM)
 #pragma pop
+#endif
 
 #endif
 

@@ -166,11 +166,12 @@ void flip_sequencer()
 		  rx_override[2] = rx[2];
 			
 			if ( flipdir )		
-			rx_override[flipindex] = (float) LEVEL_MODE_ANGLE / (float) LEVEL_MAX_ANGLE;
-		  else
-			rx_override[flipindex] = (float) - LEVEL_MODE_ANGLE / (float) LEVEL_MAX_ANGLE;
+				rx_override[flipindex] = (float) LEVEL_MODE_ANGLE / (float) LEVEL_MAX_ANGLE;
+			else
+				rx_override[flipindex] = (float) - LEVEL_MODE_ANGLE / (float) LEVEL_MAX_ANGLE;
+
 			if( gettime() - levelmodetime > LEVEL_MODE_TIME )
-					flipstage = STAGE_FLIP_EXIT;
+				flipstage = STAGE_FLIP_EXIT;
 		break;
 			
 			

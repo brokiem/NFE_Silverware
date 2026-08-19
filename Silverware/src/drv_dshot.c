@@ -283,8 +283,10 @@ void make_packet( uint8_t number, uint16_t value, bool telemetry )
 
 // Do not change anything between #pragma push and #pragma pop
 // without redoing thorough timing measurements.
+#if defined(__CC_ARM)
 #pragma push
 #pragma O2
+#endif
 
 #ifdef __GNUC__
 #define D600_DELAY asm("nop;nop;nop;nop;nop;nop;nop;nop")
@@ -484,7 +486,9 @@ void bitbang_data()
 	}
 }
 
+#if defined(__CC_ARM)
 #pragma pop
+#endif
 
 #define DSHOT_CMD_BEEP1 1
 #define DSHOT_CMD_BEEP2 2
