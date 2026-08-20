@@ -224,7 +224,9 @@ if (aux[HORIZON]){
 
 
 #define M_PI  3.14159265358979323846	/* pi */
-
+#ifndef M_PIf
+#define M_PIf 3.14159265358979323846f
+#endif
 
 #define OCTANTIFY(_x, _y, _o)   do {                            \
     float _t;                                                   \
@@ -248,11 +250,11 @@ float atan2approx(float y, float x)
 
 	t = (y / x);
 	// atan function for 0 - 1 interval
-	dphi = t*( ( M_PI/4 + 0.2447f ) + t *( ( -0.2447f + 0.0663f ) + t*( - 0.0663f)) );
-	phi *= M_PI / 4;
+	dphi = t*( ( M_PIf/4.0f + 0.2447f ) + t *( ( -0.2447f + 0.0663f ) + t*( - 0.0663f)) );
+	phi *= M_PIf / 4.0f;
 	dphi = phi + dphi;
-	if (dphi > (float) M_PI)
-		dphi -= 2 * M_PI;
+	if (dphi > M_PIf)
+		dphi -= 2.0f * M_PIf;
 	return RADTODEG * dphi;
 }
 

@@ -384,13 +384,13 @@ int rxdata[15];
 
 float packettodata(int *data)
 {
-    return (((data[0] & 0x0003) * 256 + data[1]) - 512) * 0.001953125;
+    return (((data[0] & 0x0003) * 256 + data[1]) - 512) * 0.001953125f;
 }
 
 float bytetodata(int byte)
 {
-    //return (byte - 128) * 0.0078125; // -1 to 1
-    return byte * 0.00390625; // 0 to 1
+    //return (byte - 128) * 0.0078125f; // -1 to 1
+    return byte * 0.00390625f; // 0 to 1
 }
 
 
