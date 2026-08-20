@@ -1,10 +1,10 @@
-
 // library headers
 #include <stdbool.h>
 #include <inttypes.h>
 
 //#define _USE_MATH_DEFINES
 #include <math.h>
+#include <string.h>
 #include "drv_time.h"
 
 #include "util.h"
@@ -83,16 +83,15 @@ void imu_init(void)
 
 float Q_rsqrt( float number )
 {
-
-	long i;
+	uint32_t i;
 	float x2, y;
 	const float threehalfs = 1.5F;
 
 	x2 = number * 0.5F;
 	y  = number;
-	i  = * ( long * ) &y;                       
-	i  = 0x5f3759df - ( i >> 1 );               
-	y  = * ( float * ) &i;
+	memcpy(&i, &y, 4);
+	i  = 0x5f3759df - ( i >> 1 );
+	memcpy(&y, &i, 4);
 	y  = y * ( threehalfs - ( x2 * y * y ) );   // 1st iteration
 	y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
 //	y  = y * ( threehalfs - ( x2 * y * y ) );   // 3nd iteration, this can be removed
