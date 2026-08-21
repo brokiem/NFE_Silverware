@@ -30,6 +30,16 @@ From the repository root:
 .\benchmark.ps1 candidate --compare baseline
 ```
 
+Run the complete ArmClang optimization/fast-math/LTO matrix with:
+
+```powershell
+.\benchmark.ps1 matrix
+```
+
+This tests `-O0`, `-O1`, `-O2`, `-O3`, `-Os`, `-Oz`, and `-Ofast`, each with explicit fast-math on/off and LTO on/off. The project file is restored byte-for-byte after every build and on failure. Use `--resume` after an interrupted run to reuse verified completed snapshots.
+
+The reviewed summary is written to `benchmark/compiler_matrix_report.md`; exact per-configuration binaries remain under the ignored `benchmark/results/matrix_*/` directories.
+
 With a normal Python environment whose requirements are already installed, the shorter equivalent is:
 
 ```powershell

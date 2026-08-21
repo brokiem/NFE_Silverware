@@ -48,8 +48,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not $BenchmarkArguments -or $BenchmarkArguments.Count -eq 0) {
-    throw 'Usage: .\benchmark.ps1 baseline   (or candidate)'
+    throw 'Usage: .\benchmark.ps1 baseline   (or: .\benchmark.ps1 matrix)'
 }
 
-& $venvPython (Join-Path $workspace 'bench.py') @BenchmarkArguments
+$driver = Join-Path $workspace 'bench.py'
+$driverArguments = $BenchmarkArguments
+if ($BenchmarkArguments[0] -eq 'matrix') {
+    $driver = Join-Path $workspace 'matrix.py'
+    if ($BenchmarkArguments.Count -gt 1) {
+        $driverArguments = @($BenchmarkArguments[1..($BenchmarkArguments.Count - 1)])
+    } else {
+        $driverArguments = @()
+    }
+}
+
+& $venvPython $driver @driverArguments
 exit $LASTEXITCODE

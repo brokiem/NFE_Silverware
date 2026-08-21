@@ -50,6 +50,30 @@ MAP_FUNCTION_RE = re.compile(
     r"^\s*(\S+)\s+0x[0-9a-fA-F]+\s+Thumb Code\s+\d+\s+(\S+\.o)\("
 )
 
+OPTIMIZATION_FLAG_RE = re.compile(r"-O(?:0|1|2|3|s|z|fast)")
+
+
+def effective_compiler_settings(command: str) -> dict[str, object]:
+    """Return the last effective optimization, fast-math, and LTO settings."""
+    tokens = command.split()
+    optimization_flags = [token for token in tokens if OPTIMIZATION_FLAG_RE.fullmatch(token)]
+    floating_point_flags = [
+        token for token in tokens
+        if token in {
+            "-ffast-math", "-fno-fast-math", "-ffinite-math-only", "-fno-finite-math-only",
+            "-fno-signed-zeros", "-fsigned-zeros", "-freciprocal-math", "-fno-reciprocal-math",
+        }
+    ]
+    fast_math_flags = [token for token in tokens if token in {"-ffast-math", "-fno-fast-math"}]
+    lto_flags = [token for token in tokens if token in {"-flto", "-fno-lto"}]
+    return {
+        "optimization_flag": optimization_flags[-1] if optimization_flags else None,
+        "floating_point_flags": floating_point_flags,
+        "fast_math": fast_math_flags[-1] == "-ffast-math" if fast_math_flags else False,
+        "lto": lto_flags[-1] == "-flto" if lto_flags else False,
+        "lto_flag": lto_flags[-1] if lto_flags else None,
+    }
+
 
 def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -513,12 +537,10 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         item["arguments_as_recorded_by_uvision"] for item in compiler_records
         if item["source"].lower().endswith("control.c")
     )
-    optimization_flag = next(
-        (argument for argument in control_command.split() if re.fullmatch(r"-O(?:[0-3sz]|fast)", argument)),
-        "not recorded",
-    )
-    fast_math = "enabled" if "-ffast-math" in control_command.split() else "disabled"
-    lto = "enabled" if any("lto" in argument.lower() for argument in control_command.split()) else "disabled"
+    effective_settings = effective_compiler_settings(control_command)
+    optimization_flag = effective_settings["optimization_flag"] or "not recorded"
+    fast_math = "enabled" if effective_settings["fast_math"] else "disabled"
+    lto = "enabled" if effective_settings["lto"] else "disabled"
     hardware_text = (result_dir / "hardware.h").read_text(encoding="utf-8", errors="replace")
     i2c_speed_options = (
         ("HW_I2C_SPEED_FAST_OC", 1_000_000),
@@ -745,22 +767,15 @@ def compile_math_harness(result_dir: Path, tools: dict[str, Path]) -> None:
         item["arguments_as_recorded_by_uvision"] for item in compiler_records
         if item["source"].lower().endswith("control.c")
     )
-    recorded_tokens = reference_command.split()
-    optimization_flag = next(
-        (token for token in recorded_tokens if re.fullmatch(r"-O(?:0|1|2|3|s|z|fast)", token)),
-        "-O1",
-    )
-    floating_point_flags = [
-        token for token in recorded_tokens
-        if token in {
-            "-ffast-math", "-fno-fast-math", "-ffinite-math-only", "-fno-finite-math-only",
-            "-fno-signed-zeros", "-fsigned-zeros", "-freciprocal-math", "-fno-reciprocal-math",
-        }
-    ]
+    effective_settings = effective_compiler_settings(reference_command)
+    optimization_flag = effective_settings["optimization_flag"] or "-O1"
+    floating_point_flags = effective_settings["floating_point_flags"]
+    lto_flags = [effective_settings["lto_flag"]] if effective_settings["lto_flag"] else []
     compile_args = [
         str(tools["armclang"]), "-xc", "-std=c99", "--target=arm-arm-none-eabi", "-mcpu=cortex-m0", "-c",
         "-fno-rtti", "-funsigned-char", "-fshort-enums", "-fshort-wchar", "-D__MICROLIB", "-gdwarf-4", optimization_flag,
         *floating_point_flags,
+        *lto_flags,
         "-ffunction-sections", "-Wall", "-Wextra", "-Wno-packed", "-Wno-reserved-id-macro", "-Wno-unused-macros",
         "-Wno-documentation-unknown-command", "-Wno-documentation", "-Wno-license-management", "-Wno-parentheses-equality",
         "-Wno-reserved-identifier", "-I", "./src", "-I", "../Libraries/STM32F0xx_StdPeriph_Driver/inc",
@@ -772,8 +787,10 @@ def compile_math_harness(result_dir: Path, tools: dict[str, Path]) -> None:
 
     axf = result_dir / "flight_math.axf"
     map_path = result_dir / "flight_math.map"
+    link_lto_flags = ["--lto"] if effective_settings["lto"] else []
     link_args = [
-        str(tools["armlink"]), "--cpu", "Cortex-M0", "--library_type=microlib", "--strict", "--remove",
+        str(tools["armlink"]), "--cpu", "Cortex-M0", *link_lto_flags,
+        "--library_type=microlib", "--strict", "--remove",
         "--entry", "benchmark_entry", "--scatter", str(BENCHMARK / "harness" / "math_harness.sct"),
         "--map", "--symbols", "--xref", "--callgraph", "--info", "sizes", "--info", "totals", "--info", "unused",
         "--list", str(map_path), "-o", str(axf), str(harness_obj),

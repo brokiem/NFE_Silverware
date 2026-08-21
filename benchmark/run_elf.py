@@ -119,7 +119,11 @@ def execute_math_elf(result_dir: Path) -> None:
 
         emulator.hook_add(UC_HOOK_BLOCK, on_block)
         entry = _symbol(symtab, "benchmark_entry")["st_value"] & ~1
-        emulator.emu_start(entry | 1, 0, timeout=120_000_000, count=500_000_000)
+        # Unoptimized matrix variants can take several minutes under the
+        # instrumented block hook even though the same 2,048-iteration corpus
+        # completes normally. Keep a finite ceiling without misclassifying
+        # those builds as semantic failures.
+        emulator.emu_start(entry | 1, 0, timeout=600_000_000, count=1_000_000_000)
         if not stopped:
             raise RuntimeError("Harness emulator stopped before returning through the sentinel")
 
