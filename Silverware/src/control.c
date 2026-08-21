@@ -63,7 +63,12 @@ int onground_long = 1;
 float thrsum;
 
 float error[PIDNUMBER];
-float motormap( float input);
+#ifdef MOTOR_CURVE_NONE
+#define MOTOR_MAP(input) (input)
+#else
+float motormap(float input);
+#define MOTOR_MAP(input) motormap(input)
+#endif
 
 float yawangle;
 
@@ -989,7 +994,7 @@ thrsum = 0;		//reset throttle sum for voltage monitoring logic in main loop
 		#ifndef NOMOTORS
 		#ifndef MOTORS_TO_THROTTLE
 		//normal mode
-		pwm_set( i ,motormap( mix[i] ) );
+		pwm_set(i, MOTOR_MAP(mix[i]));
 		#else
 		// throttle test mode
 		ledcommand = 1;
@@ -998,7 +1003,7 @@ thrsum = 0;		//reset throttle sum for voltage monitoring logic in main loop
 		#else
 		// no motors mode ( anti-optimization)
 		#warning "NO MOTORS"
-		tempx[i] = motormap( mix[i] );
+		tempx[i] = MOTOR_MAP(mix[i]);
 		#endif
 //***********************End Motor PWM Command Logic
 		
