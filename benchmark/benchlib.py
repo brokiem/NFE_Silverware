@@ -718,9 +718,27 @@ def build_firmware(result_dir: Path, tools: dict[str, Path]) -> None:
 
 def compile_math_harness(result_dir: Path, tools: dict[str, Path]) -> None:
     harness_obj = result_dir / "flight_math_harness.o"
+    compiler_records = read_json(result_dir / "compiler_flags.json")["commands"]
+    reference_command = next(
+        item["arguments_as_recorded_by_uvision"] for item in compiler_records
+        if item["source"].lower().endswith("control.c")
+    )
+    recorded_tokens = reference_command.split()
+    optimization_flag = next(
+        (token for token in recorded_tokens if re.fullmatch(r"-O(?:0|1|2|3|s|z|fast)", token)),
+        "-O1",
+    )
+    floating_point_flags = [
+        token for token in recorded_tokens
+        if token in {
+            "-ffast-math", "-fno-fast-math", "-ffinite-math-only", "-fno-finite-math-only",
+            "-fno-signed-zeros", "-fsigned-zeros", "-freciprocal-math", "-fno-reciprocal-math",
+        }
+    ]
     compile_args = [
         str(tools["armclang"]), "-xc", "-std=c99", "--target=arm-arm-none-eabi", "-mcpu=cortex-m0", "-c",
-        "-fno-rtti", "-funsigned-char", "-fshort-enums", "-fshort-wchar", "-D__MICROLIB", "-gdwarf-4", "-O1",
+        "-fno-rtti", "-funsigned-char", "-fshort-enums", "-fshort-wchar", "-D__MICROLIB", "-gdwarf-4", optimization_flag,
+        *floating_point_flags,
         "-ffunction-sections", "-Wall", "-Wextra", "-Wno-packed", "-Wno-reserved-id-macro", "-Wno-unused-macros",
         "-Wno-documentation-unknown-command", "-Wno-documentation", "-Wno-license-management", "-Wno-parentheses-equality",
         "-Wno-reserved-identifier", "-I", "./src", "-I", "../Libraries/STM32F0xx_StdPeriph_Driver/inc",
