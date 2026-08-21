@@ -481,7 +481,9 @@ float pid(int x )
 				static float lastsetpoint[3];
         float lpf2( float in, int num);
   
-						dterm = ((setpoint[x] - lastsetpoint[x]) * pidkd[x] * stickAccelerator[x] * transitionSetpointWeight[x] * timefactor) - ((gyro[x] - lastrate[x]) * pidkd[x] * timefactor);
+						float dtermGain = pidkd[x] * timefactor;
+						dterm = ((setpoint[x] - lastsetpoint[x]) * stickAccelerator[x] * transitionSetpointWeight[x]
+								- (gyro[x] - lastrate[x])) * dtermGain;
 						lastsetpoint[x] = setpoint [x];
 						lastrate[x] = gyro[x];	
             dterm = lpf2(  dterm, x );
