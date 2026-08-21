@@ -209,7 +209,7 @@ while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TXIS) == RESET)
 	}
 
 // send next byte (register location)	
-I2C_SendData(I2C1, (uint8_t)reg);
+I2C1->TXDR = (uint8_t)reg;
 	
 //i2c_timeout = 0;
 // wait until last data sent
@@ -236,7 +236,7 @@ unsigned int i2c_timeout = 0;
 // send start + writeaddress + register location, common send+receive
 hw_i2c_sendheader( reg,2 );
 // send register value
-I2C_SendData(I2C1, (uint8_t) data);
+I2C1->TXDR = (uint8_t)data;
 // wait for finish	
 while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TC) == RESET)
 	{
@@ -297,7 +297,6 @@ int hw_i2c_readreg( int reg )
 	hw_i2c_readdata( reg, &data, 1 );
 	return data;
 }
-
 
 
 
