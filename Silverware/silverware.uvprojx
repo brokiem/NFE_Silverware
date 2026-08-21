@@ -315,7 +315,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>2</Optim>
+            <Optim>3</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -338,7 +338,7 @@
             <v6WtE>0</v6WtE>
             <v6Rtti>0</v6Rtti>
             <VariousControls>
-              <MiscControls></MiscControls>
+              <MiscControls>-ffast-math</MiscControls>
               <Define>USE_STDPERIPH_DRIVER, STM32F031</Define>
               <Undefine></Undefine>
               <IncludePath>.\src ; ..\; ..\Libraries\CMSIS\Device\ST\STM32F0xx\Include; ..\Libraries\CMSIS\Include; ..\Libraries\STM32F0xx_StdPeriph_Driver\inc;  ..\Utilities\</IncludePath>
@@ -404,7 +404,7 @@
             <GroupArmAds>
               <Cads>
                 <interw>2</interw>
-                <Optim>2</Optim>
+                <Optim>3</Optim>
                 <oTime>2</oTime>
                 <SplitLS>2</SplitLS>
                 <OneElfS>2</OneElfS>
