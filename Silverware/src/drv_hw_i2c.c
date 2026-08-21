@@ -260,7 +260,7 @@ return;
 int hw_i2c_readdata( int reg, int *data, int size )
 {
 
-static uint8_t i = 0;
+int i;
 unsigned int i2c_timeout = 0;
 
 	// send start + writeaddress + register location, common send+receive
@@ -297,9 +297,6 @@ int hw_i2c_readreg( int reg )
 	hw_i2c_readdata( reg, &data, 1 );
 	return data;
 }
-
-
-
 
 
 
