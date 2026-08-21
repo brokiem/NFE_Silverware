@@ -352,7 +352,7 @@ void softi2c_writedata(int device_address ,int register_address , int *data, int
 }
 
 
-void softi2c_readdata(int device_address ,int register_address , int *data, int size ) 
+void softi2c_readdata(int device_address, int register_address, uint8_t *data, int size)
 {
 	int index = 0;
  _sendstart();

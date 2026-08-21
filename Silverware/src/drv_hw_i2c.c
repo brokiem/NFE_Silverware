@@ -257,7 +257,7 @@ return;
 
 
 
-int hw_i2c_readdata( int reg, int *data, int size )
+int hw_i2c_readdata( int reg, uint8_t *data, int size )
 {
 
 int i;
@@ -293,11 +293,10 @@ return 1;
 
 int hw_i2c_readreg( int reg )
 {
-	int data;
+	uint8_t data;
 	hw_i2c_readdata( reg, &data, 1 );
 	return data;
 }
-
 
 
 

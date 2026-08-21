@@ -127,7 +127,7 @@ float lpffilter2(float in, int num);
 
 void sixaxis_read(void)
 {
-	int data[16];
+	uint8_t data[14];
 	float gyronew[3];
 	
 	i2c_readdata( 59 , data , 14 );
@@ -285,7 +285,7 @@ gyronew[2] = - gyronew[2];
 
 void gyro_read( void)
 {
-int data[6];
+uint8_t data[6];
 	
 i2c_readdata( 67 , data , 6 );
 	
@@ -389,7 +389,7 @@ for (int i = 0; i < 3; i++)
 
 void gyro_cal(void)
 {
-int data[6];
+uint8_t data[6];
 float limit[3];	
 unsigned long time = gettime();
 unsigned long timestart = time;
@@ -516,7 +516,6 @@ void acc_cal(void)
 #endif
 		
 }
-
 
 
 

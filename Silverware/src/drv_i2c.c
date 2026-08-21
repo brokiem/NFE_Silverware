@@ -74,7 +74,7 @@ void i2c_writereg( int reg ,int data)
 }
 
 
-int i2c_readdata( int reg, int *data, int size )
+int i2c_readdata( int reg, uint8_t *data, int size )
 {
 	#ifdef USE_HARDWARE_I2C
 	return hw_i2c_readdata( reg, data, size );
@@ -104,5 +104,4 @@ int i2c_readreg( int reg )
 	return 255;
 	#endif
 }
-
 
