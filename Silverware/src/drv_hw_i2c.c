@@ -282,7 +282,7 @@ for(i = 0; i<size; i++)
 				return 0;
 				}
 		}
-	data[i] = I2C_ReceiveData(I2C1);
+	data[i] = (uint8_t)I2C1->RXDR;
 	}
 
 //data received	
@@ -297,7 +297,6 @@ int hw_i2c_readreg( int reg )
 	hw_i2c_readdata( reg, &data, 1 );
 	return data;
 }
-
 
 
 
