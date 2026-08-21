@@ -574,9 +574,9 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         "",
         f"The generated scatter file permits {memory.get('linker_flash_region_bytes'):,} Flash bytes and the compiler command defines `STM32F030x6`, while the µVision device/CPU declaration says `{configuration['device']}` with {memory.get('project_device_irom_bytes'):,} bytes IROM. The {memory.get('rom_bytes'):,}-byte image fits the linker region but exceeds the declared device IROM by {max(0, memory.get('rom_bytes') - memory.get('project_device_irom_bytes')):,} bytes. This configuration inconsistency must be resolved before physical flashing; the benchmark does not silently reinterpret it.",
         "",
-        "## Top 10 expected dynamic CPU opportunities",
+        "## Top 10 linked static-cost triage targets",
         "",
-        "| Rank | Function | Expected calls/loop | ROM B | Static score/call | Expected score/loop | Expected float-helper calls/loop |",
+        "| Rank | Function | Model entries/loop | ROM B | Static score/body | Model score/loop | Static helper BL sites × model entries |",
         "|---:|---|---:|---:|---:|---:|---|",
     ]
     for rank, row in enumerate(ranked[:10], 1):
@@ -587,7 +587,7 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         )
     lines.extend([
         "",
-        "Ranking combines linked function assembly, linked software-helper bodies, and the explicit expected-executions model. It is triage evidence, not hardware timing.",
+        "Ranking combines linked function assembly, linked software-helper bodies, and the explicit source-path entry model. Helper values are static BL sites scaled by model entries, not measured dynamic calls; branch-dependent and cached helper executions are reported by the deterministic trace below. It is triage evidence, not hardware timing.",
         "",
         "## Linked active-path functions",
         "",
