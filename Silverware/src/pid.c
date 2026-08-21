@@ -373,9 +373,7 @@ float pid(int x )
     
     #ifdef ENABLE_SETPOINT_WEIGHTING
     // P term
-    pidoutput[x] = error[x] * ( b[x])* pidkp[x];				
-    // b
-    pidoutput[x] +=  - ( 1.0f - b[x])* pidkp[x] * gyro[x];
+    pidoutput[x] = (error[x] * b[x] - (1.0f - b[x]) * gyro[x]) * pidkp[x];
     #else
     // P term with b disabled
     pidoutput[x] = error[x] * pidkp[x];
