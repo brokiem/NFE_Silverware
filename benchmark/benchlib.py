@@ -513,6 +513,26 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         item["arguments_as_recorded_by_uvision"] for item in compiler_records
         if item["source"].lower().endswith("control.c")
     )
+    optimization_flag = next(
+        (argument for argument in control_command.split() if re.fullmatch(r"-O(?:[0-3sz]|fast)", argument)),
+        "not recorded",
+    )
+    fast_math = "enabled" if "-ffast-math" in control_command.split() else "disabled"
+    lto = "enabled" if any("lto" in argument.lower() for argument in control_command.split()) else "disabled"
+    hardware_text = (result_dir / "hardware.h").read_text(encoding="utf-8", errors="replace")
+    i2c_speed_options = (
+        ("HW_I2C_SPEED_FAST_OC", 1_000_000),
+        ("HW_I2C_SPEED_FAST2", 1_000_000),
+        ("HW_I2C_SPEED_FAST", 400_000),
+        ("HW_I2C_SPEED_SLOW1", 200_000),
+        ("HW_I2C_SPEED_SLOW2", 100_000),
+    )
+    i2c_hz = next(
+        (frequency for define, frequency in i2c_speed_options
+         if re.search(rf"^\s*#define\s+{define}\b", hardware_text, re.MULTILINE)),
+        400_000,
+    )
+    i2c_theoretical_us = 153 * 1_000_000 / i2c_hz
     linker_options = " ".join(
         line.strip() for line in (result_dir / "linker_flags.lnp").read_text(encoding="utf-8", errors="replace").splitlines()
         if line.lstrip().startswith("--")
@@ -529,7 +549,7 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         "- Board: `BWHOOP` only",
         "- Receiver: `RX_BAYANG_PROTOCOL_TELEMETRY_AUTOBIND` with `USE_MULTI`; `RX_SBUS` is disabled",
         "- CPU: Cortex-M0 / ARMv6-M soft float; active firmware clock path is 48 MHz (`ENABLE_OVERCLOCK` disabled)",
-        "- Optimizer: ArmClang `-O1`, function sections, no LTO",
+        f"- Optimizer: ArmClang `{optimization_flag}`, fast-math {fast_math}, LTO {lto}",
         "- Exact per-file commands for every translation unit are saved in `compiler_flags.json` and raw `compiler_dependency.dep`",
         "",
         "Representative exact C command recorded by µVision for `control.c`:",
@@ -552,7 +572,7 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         f"- Project device declaration: {memory.get('project_device_irom_bytes')} bytes IROM for {configuration['device']}",
         f"- Linked functions reachable from active loop roots: {len(active)}",
         "",
-        "The generated scatter file permits 31,744 Flash bytes and the compiler command defines `STM32F030x6`, while the µVision device/CPU declaration says `STM32F030F4` with 16,384 bytes IROM. The 19,576-byte image fits the linker region but exceeds the declared device IROM by 3,192 bytes. This configuration inconsistency must be resolved before physical flashing; the benchmark does not silently reinterpret it.",
+        f"The generated scatter file permits {memory.get('linker_flash_region_bytes'):,} Flash bytes and the compiler command defines `STM32F030x6`, while the µVision device/CPU declaration says `{configuration['device']}` with {memory.get('project_device_irom_bytes'):,} bytes IROM. The {memory.get('rom_bytes'):,}-byte image fits the linker region but exceeds the declared device IROM by {max(0, memory.get('rom_bytes') - memory.get('project_device_irom_bytes')):,} bytes. This configuration inconsistency must be resolved before physical flashing; the benchmark does not silently reinterpret it.",
         "",
         "## Top 10 expected dynamic CPU opportunities",
         "",
@@ -584,7 +604,7 @@ def render_static_report(result_dir: Path, configuration: dict, memory: dict, an
         "",
         "## External peripheral timing (kept separate)",
         "",
-        "- MPU6050: 14 payload bytes, 17 wire bytes / 153 SCL clocks per loop. At the configured nominal 400 kHz this is 382.5 µs theoretical bus time. The driver blocks in flag-poll loops; this wait is not included in CPU static scores.",
+        f"- MPU6050: 14 payload bytes, 17 wire bytes / 153 SCL clocks per loop. At the configured nominal {i2c_hz / 1_000_000:g} MHz this is {i2c_theoretical_us:g} µs theoretical bus time. The driver blocks in flag-poll loops; this wait is not included in CPU static scores.",
         "- XN297L: steady status polling performs two software-SPI bytes (16 bit iterations); packet and telemetry traffic are conditional. This GPIO work is reported separately from flight-math emulation.",
         "",
         "See `function_metrics.csv`, `static_analysis.json`, `callgraph.dot`, `expected_loop_cost.json`, and the saved AXF/map/disassembly for auditable evidence.",
@@ -609,7 +629,9 @@ def render_active_callgraph(result_dir: Path, analysis: dict, active: set[str]) 
     linked_aliases = {alias for item in analysis["functions"] for alias in item["aliases"]}
     dynamic_entries = trace.get("function_entry_counts", {})
     for name, count in roots.items():
-        lines.append(f"| `{name}` | {'yes' if name in linked_aliases else 'no'} | {count} | {dynamic_entries.get(name, 'not exercised')} |")
+        linked = name in linked_aliases
+        active_count = count if linked else 0
+        lines.append(f"| `{name}` | {'yes' if linked else 'no'} | {active_count} | {dynamic_entries.get(name, 'not exercised')} |")
     lines.extend([
         "",
         "## Linked edges in the active closure",
@@ -830,6 +852,85 @@ def ordered_float_int(value: float) -> int:
     return 0x80000000 - bits if bits & 0x80000000 else bits + 0x80000000
 
 
+def _float32(value: float) -> float:
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
+def _xorshift32(state: int) -> int:
+    state ^= (state << 13) & 0xffffffff
+    state ^= state >> 17
+    state ^= (state << 5) & 0xffffffff
+    return state & 0xffffffff
+
+
+def _signed_unit(state: int) -> tuple[int, float]:
+    state = _xorshift32(state)
+    value = state & 0xffff
+    return state, _float32(_float32(float(value) - 32768.0) * _float32(1.0 / 32768.0))
+
+
+def deterministic_benchmark_input(iteration: int) -> dict:
+    """Replay the fixed flight-math PRNG through one requested iteration."""
+    if iteration < 0:
+        raise ValueError("iteration must be non-negative")
+    state = 0x13579bdf
+    result = {}
+    for current in range(iteration + 1):
+        state, roll_unit = _signed_unit(state)
+        state, pitch_unit = _signed_unit(state)
+        state, yaw_unit = _signed_unit(state)
+        roll = _float32(roll_unit * _float32(0.85))
+        pitch = _float32(pitch_unit * _float32(0.85))
+        yaw = _float32(yaw_unit * _float32(0.70))
+
+        state = _xorshift32(state)
+        throttle_scale = _float32(0.75 / 65535.0)
+        throttle = _float32(_float32(0.15) + _float32(float(state & 0xffff) * throttle_scale))
+
+        gyro_samples = []
+        for stimulus in (roll, pitch, yaw):
+            state, noise_unit = _signed_unit(state)
+            noise = _float32(noise_unit * _float32(0.08))
+            gyro_samples.append(_float32(_float32(stimulus * _float32(5.0)) + noise))
+
+        state, accel_x_unit = _signed_unit(state)
+        state, accel_y_unit = _signed_unit(state)
+        state, accel_z_unit = _signed_unit(state)
+        accel_samples = [
+            _float32(_float32(roll * _float32(368.0)) + _float32(accel_x_unit * _float32(30.0))),
+            _float32(_float32(pitch * _float32(368.0)) + _float32(accel_y_unit * _float32(30.0))),
+            _float32(_float32(2048.0) + _float32(accel_z_unit * _float32(52.0))),
+        ]
+        if current == iteration:
+            phase = (current // 256) & 3
+            result = {
+                "iteration": current,
+                "mode": phase,
+                "pid_profile": (current // 512) & 1,
+                "rx": [roll, pitch, yaw, throttle],
+                "gyro_sample": gyro_samples,
+                "accel_sample": accel_samples,
+            }
+    return result
+
+
+def _difference_location(
+    iteration: int,
+    field: int,
+    left: float,
+    right: float,
+    field_order: list[str],
+) -> dict:
+    return {
+        "iteration": iteration,
+        "field": field,
+        "field_name": field_order[field] if field < len(field_order) else f"field_{field}",
+        "baseline": left,
+        "candidate": right,
+        "deterministic_input": deterministic_benchmark_input(iteration),
+    }
+
+
 def compare_float_outputs(baseline: dict, candidate: dict) -> dict:
     base = baseline["records"]
     cand = candidate["records"]
@@ -840,7 +941,10 @@ def compare_float_outputs(baseline: dict, candidate: dict) -> dict:
     max_ulp = 0
     bitwise_mismatches = 0
     finite_mismatches = 0
-    worst = None
+    field_order = baseline.get("field_order", [])
+    worst_absolute = None
+    worst_relative = None
+    worst_ulp = None
     for iteration, (base_record, cand_record) in enumerate(zip(base, cand)):
         if len(base_record) != len(cand_record):
             return {"shape_mismatch": True, "iteration": iteration}
@@ -857,9 +961,13 @@ def compare_float_outputs(baseline: dict, candidate: dict) -> dict:
             ulp = abs(ordered_float_int(left) - ordered_float_int(right))
             if absolute > max_abs:
                 max_abs = absolute
-                worst = {"iteration": iteration, "field": field, "baseline": left, "candidate": right}
-            max_rel = max(max_rel, relative)
-            max_ulp = max(max_ulp, ulp)
+                worst_absolute = _difference_location(iteration, field, left, right, field_order)
+            if relative > max_rel:
+                max_rel = relative
+                worst_relative = _difference_location(iteration, field, left, right, field_order)
+            if ulp > max_ulp:
+                max_ulp = ulp
+                worst_ulp = _difference_location(iteration, field, left, right, field_order)
     return {
         "shape_mismatch": False,
         "max_absolute_float_error": max_abs,
@@ -867,5 +975,7 @@ def compare_float_outputs(baseline: dict, candidate: dict) -> dict:
         "max_ulp_difference": max_ulp,
         "bitwise_output_mismatches": bitwise_mismatches,
         "nonfinite_mismatches": finite_mismatches,
-        "worst_absolute_location": worst,
+        "worst_absolute_location": worst_absolute,
+        "worst_relative_location": worst_relative,
+        "worst_ulp_location": worst_ulp,
     }

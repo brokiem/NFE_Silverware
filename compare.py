@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import json
 import re
 import sys
 from pathlib import Path
@@ -162,10 +163,15 @@ def compare(baseline_label: str, candidate_label: str) -> Path:
         f"- Max ULP difference: {numerical.get('max_ulp_difference', 'shape mismatch')}",
         f"- Output mismatches: {numerical.get('bitwise_output_mismatches', 'shape mismatch')}",
         f"- Verdict: **{verdict}**",
-        "",
-        "## Function evidence",
-        "",
     ]
+    worst = numerical.get("worst_absolute_location")
+    if worst:
+        lines.extend([
+            f"- Worst absolute output: `{worst['field_name']}` at iteration {worst['iteration']} "
+            f"({worst['baseline']} / {worst['candidate']})",
+            f"- Worst deterministic input: `{json.dumps(worst['deterministic_input'], separators=(',', ':'))}`",
+        ])
+    lines.extend(["", "## Function evidence", ""])
     if not changes:
         lines.append("No linked function metric changed.")
     for change in changes:
