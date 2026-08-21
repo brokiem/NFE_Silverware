@@ -57,3 +57,8 @@ tmp/
 
 # Keil uVision per-user workspace state
 *.uvguix.*
+
+# Local benchmark environments and generated binary evidence
+/benchmark/.venv/
+/benchmark/results/
+__pycache__/

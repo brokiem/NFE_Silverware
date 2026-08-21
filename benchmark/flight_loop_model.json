@@ -1,0 +1,30 @@
+{
+  "label": "STATIC COST ESTIMATE",
+  "scenario": "steady armed BWHOOP loop; no gestures, calibration, binding, or failsafe transition",
+  "loop_rate_hz_nominal": 1000,
+  "entries": [
+    {"function": "sixaxis_read", "executions_per_loop": 1, "basis": "main.c active loop"},
+    {"function": "lpffilter", "executions_per_loop": 3, "basis": "one per gyro axis in sixaxis_read"},
+    {"function": "lpffilter2", "executions_per_loop": 3, "basis": "one per gyro axis in sixaxis_read"},
+    {"function": "control", "executions_per_loop": 1, "basis": "main.c active loop"},
+    {"function": "pid_precalc", "executions_per_loop": 1, "basis": "control steady path"},
+    {"function": "rotateErrors", "executions_per_loop": 1, "basis": "control steady path"},
+    {"function": "pid", "executions_per_loop": 3, "basis": "one per control axis"},
+    {"function": "splpf", "executions_per_loop": 1, "basis": "PID throttle-D filter on active profile"},
+    {"function": "motormap", "executions_per_loop": 4, "basis": "one per brushed motor"},
+    {"function": "pwm_set", "executions_per_loop": 4, "basis": "one per brushed motor"},
+    {"function": "imu_calc", "executions_per_loop": 1, "basis": "main.c active loop"},
+    {"function": "Q_rsqrt", "executions_per_loop": 2, "basis": "armed/in-air valid-acceleration IMU path"},
+    {"function": "checkrx", "executions_per_loop": 1, "basis": "main.c loop"},
+    {"function": "xn_readreg", "executions_per_loop": 1, "basis": "Bayang receiver status poll"},
+    {"function": "spi_sendbyte", "executions_per_loop": 1, "basis": "XN297 status command byte; packet payload is conditional"},
+    {"function": "spi_recvbyte", "executions_per_loop": 1, "basis": "XN297 status response byte; packet payload is conditional"},
+    {"function": "adc_read", "executions_per_loop": 2, "basis": "battery and reference ADC reads"},
+    {"function": "lpf", "executions_per_loop": 4, "basis": "battery filters plus nominal IMU gravity correction; path-dependent"}
+  ],
+  "limitations": [
+    "Counts are expected invocations, not measured hardware events.",
+    "Internal loop trip counts and branch probabilities remain visible separately in the deterministic emulator trace.",
+    "RX packet handling, telemetry transmission, gestures, and safety transitions add conditional work."
+  ]
+}

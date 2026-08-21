@@ -1,0 +1,19 @@
+{
+  "i2c_mpu6050": {
+    "implementation": "hardware STM32F0 I2C with blocking flag polling",
+    "nominal_bus_hz": 400000,
+    "sensor_payload_bytes_per_loop": 14,
+    "wire_bytes_per_loop": 17,
+    "scl_clocks_per_loop": 153,
+    "theoretical_bus_time_us": 382.5,
+    "derivation": "write address + register + repeated-start read address + 14 data bytes; 9 SCL clocks per byte",
+    "cpu_behavior": "polls I2C flags while the transfer progresses; this is external wait behavior and is excluded from CPU static scores"
+  },
+  "xn297_bayang": {
+    "implementation": "XN297L three-wire software SPI",
+    "steady_poll_wire_bytes_per_loop": 2,
+    "steady_poll_bit_iterations_per_loop": 16,
+    "cpu_behavior": "GPIO bit-banging executes on the CPU; packet reads and telemetry writes are conditional",
+    "separation": "reported as peripheral/polling work, never converted into simulated flight-math timing"
+  }
+}

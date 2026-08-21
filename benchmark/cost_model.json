@@ -1,0 +1,20 @@
+{
+  "label": "STATIC COST ESTIMATE",
+  "unit": "relative Cortex-M0 cost units (not cycles or time)",
+  "weights": {
+    "native_alu_or_other": 1,
+    "multiply": 1,
+    "load": 2,
+    "store": 2,
+    "conditional_branch": 2,
+    "unconditional_branch": 1,
+    "call": 2,
+    "return": 2
+  },
+  "notes": [
+    "Weights are deliberately simple relative weights for ARMv6-M triage.",
+    "Software floating-point helpers are expanded using their linked helper bodies when a static caller score is calculated.",
+    "Instruction-dependent latency, flash wait states, taken paths, pipeline refill, alignment, bus contention, and peripheral waits are not modeled.",
+    "No score in this framework is a physical cycle or time measurement."
+  ]
+}
