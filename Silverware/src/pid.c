@@ -405,6 +405,17 @@ float pid(int x )
 				float transitionSetpointWeight[3];
 				float stickAccelerator[3];
 				float stickTransition[3];
+				static float stickAcceleratorInv[3] = {0};
+				static int last_pidprofile = -1;
+				if (aux[PIDPROFILE] != last_pidprofile) {
+					for (int i=0; i<3; i++) {
+						float accel = aux[PIDPROFILE] ? stickAcceleratorProfileB[i] : stickAcceleratorProfileA[i];
+						if (accel >= 1.0f) stickAcceleratorInv[i] = 1.0f / accel;
+						else stickAcceleratorInv[i] = 0.0f;
+					}
+					last_pidprofile = aux[PIDPROFILE];
+				}
+
 			if (aux[PIDPROFILE]){
 				stickAccelerator[x] = stickAcceleratorProfileB[x];
 				stickTransition[x] = stickTransitionProfileB[x];
@@ -415,7 +426,7 @@ float pid(int x )
 				if (stickAccelerator[x] < 1){
 				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * stickTransition[x]) + (1.0f- stickTransition[x]);
 				}else{
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] / stickAccelerator[x])) + (1.0f- stickTransition[x]);	
+				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] * stickAcceleratorInv[x])) + (1.0f- stickTransition[x]);
 				}
         static float lastrate[3];
 				static float lastsetpoint[3];
@@ -445,6 +456,17 @@ float pid(int x )
 				float transitionSetpointWeight[3];
 				float stickAccelerator[3];
 				float stickTransition[3];
+				static float stickAcceleratorInv[3] = {0};
+				static int last_pidprofile = -1;
+				if (aux[PIDPROFILE] != last_pidprofile) {
+					for (int i=0; i<3; i++) {
+						float accel = aux[PIDPROFILE] ? stickAcceleratorProfileB[i] : stickAcceleratorProfileA[i];
+						if (accel >= 1.0f) stickAcceleratorInv[i] = 1.0f / accel;
+						else stickAcceleratorInv[i] = 0.0f;
+					}
+					last_pidprofile = aux[PIDPROFILE];
+				}
+
 			if (aux[PIDPROFILE]){
 				stickAccelerator[x] = stickAcceleratorProfileB[x];
 				stickTransition[x] = stickTransitionProfileB[x];
@@ -455,7 +477,7 @@ float pid(int x )
 				if (stickAccelerator[x] < 1){
 				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * stickTransition[x]) + (1.0f- stickTransition[x]);
 				}else{
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] / stickAccelerator[x])) + (1.0f- stickTransition[x]);	
+				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] * stickAcceleratorInv[x])) + (1.0f- stickTransition[x]);
 				}
         static float lastrate[3];
 				static float lastsetpoint[3];
@@ -483,11 +505,22 @@ return pidoutput[x];
 // this is called in advance as an optimization because it has division
 void pid_precalc()
 {
-	timefactor = 0.0032f / looptime;
-	
+	static float last_looptime = -1.0f;
+	if (looptime != last_looptime) {
+		timefactor = 0.0032f / looptime;
+		last_looptime = looptime;
+	}
+
 #ifdef PID_VOLTAGE_COMPENSATION
 	extern float lipo_cell_count;
-	v_compensation = mapf ( (vbattfilt/lipo_cell_count) , 2.5 , 3.85 , PID_VC_FACTOR , 1.00);
+	static float last_lipo_cell_count = -1.0f;
+	static float lipo_cell_count_inv = 1.0f;
+	if (lipo_cell_count != last_lipo_cell_count) {
+		lipo_cell_count_inv = 1.0f / lipo_cell_count;
+		last_lipo_cell_count = lipo_cell_count;
+	}
+
+	v_compensation = mapf ( (vbattfilt * lipo_cell_count_inv) , 2.5 , 3.85 , PID_VC_FACTOR , 1.00);
 	if( v_compensation > PID_VC_FACTOR) v_compensation = PID_VC_FACTOR;
 	if( v_compensation < 1.00f) v_compensation = 1.00;
 	#ifdef LEVELMODE_PID_ATTENUATION

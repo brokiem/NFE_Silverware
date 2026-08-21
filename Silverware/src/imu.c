@@ -105,16 +105,7 @@ void vectorcopy(float *vector1, float *vector2);
 
 float atan2approx(float y, float x);
 
-float calcmagnitude(float vector[3])
-{
-	float accmag = 0;
-	for (uint8_t axis = 0; axis < 3; axis++)
-	  {
-		  accmag += vector[axis] * vector[axis];
-	  }
-	accmag = 1.0f/Q_rsqrt(accmag);
-	return accmag;
-}
+
 
 
 void vectorcopy(float *vector1, float *vector2)
@@ -169,12 +160,13 @@ void imu_calc(void)
 extern int onground;
   if(onground){		//happyhour bartender - quad is ON GROUND and disarmed
 	  // calc acc mag
-	  float accmag = calcmagnitude(&accel[0]);
-  	  if ((accmag > ACC_MIN * ACC_1G) && (accmag < ACC_MAX * ACC_1G)) {
-  		  // normalize acc
-  		  for (int axis = 0; axis < 3; axis++) {
-  			  accel[axis] = accel[axis] * (ACC_1G / accmag);
-  		  }
+	  float mag_sq = accel[0]*accel[0] + accel[1]*accel[1] + accel[2]*accel[2];
+	  if ((mag_sq > ACC_MIN * ACC_MIN) && (mag_sq < ACC_MAX * ACC_MAX)) {
+		  float inv_mag = Q_rsqrt(mag_sq);
+		  // normalize acc
+		  for (int axis = 0; axis < 3; axis++) {
+			  accel[axis] = accel[axis] * inv_mag;
+		  }
 
   		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FASTFILTER);
   		  for (int x = 0; x < 3; x++) {
@@ -192,23 +184,25 @@ extern int onground;
 	  }
 		#endif
 	  // calc mag of filtered acc
-	  float accmag = calcmagnitude(&accel[0]);
+	  float mag_sq = accel[0]*accel[0] + accel[1]*accel[1] + accel[2]*accel[2];
 //	  float stickmag = calcmagnitude(&stickvector[0]);
-  	  if ((accmag > ACC_MIN * ACC_1G) && (accmag < ACC_MAX * ACC_1G)){//The bartender makes the fusion if..... 
-  		  // normalize acc
-  		  for (int axis = 0; axis < 3; axis++) {
-  			  accel[axis] = accel[axis] * (ACC_1G / accmag);
-  		  }
+	  if ((mag_sq > ACC_MIN * ACC_MIN) && (mag_sq < ACC_MAX * ACC_MAX)){//The bartender makes the fusion if.....
+		  float inv_mag = Q_rsqrt(mag_sq);
+		  // normalize acc
+		  for (int axis = 0; axis < 3; axis++) {
+			  accel[axis] = accel[axis] * inv_mag;
+		  }
   		  // filter accel on to GEstG
   		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FILTERTIME);
   		  for (int x = 0; x < 3; x++) {
   			  lpf(&GEstG[x], accel[x], filtcoeff);
   		  }
   		  //heal the gravity vector after nudging it with accel (this is the fix for the yaw slow down bug some FC experienced)
-  		  float GEstGmag = calcmagnitude(&GEstG[0]);
-  		  for (int axis = 0; axis < 3; axis++) {
-  			  GEstG[axis] = GEstG[axis] * (ACC_1G / GEstGmag);
-  		  }
+		  float GEstGmag_sq = GEstG[0]*GEstG[0] + GEstG[1]*GEstG[1] + GEstG[2]*GEstG[2];
+		  float inv_GEstGmag = Q_rsqrt(GEstGmag_sq);
+		  for (int axis = 0; axis < 3; axis++) {
+			  GEstG[axis] = GEstG[axis] * inv_GEstGmag;
+		  }
   	  }
   }
 

@@ -89,32 +89,26 @@ class  filter_kalman
     private:
         float x_est_last ;
         float P_last ; 
-        float Q;
-        float R;
     public:
         filter_kalman()
         {
-            Q = 0.02; 
-            R = 0.1;
-
-            #ifdef SOFT_KALMAN_GYRO_PASS1
-            R = Q/(float)SOFT_KALMAN_GYRO_PASS1;
-            #endif
-					
+            x_est_last = 0.0f;
+            P_last = 0.0f;
         }
         float  step( float in )   
         {    
+            static const float Q = 0.02f;
+            static const float R = 0.02f / (float)SOFT_KALMAN_GYRO_PASS1;
 
             //do a prediction 
-            float x_temp_est = x_est_last; 
             float P_temp = P_last + Q; 
 
-            float K = P_temp * (1.0f/(P_temp + R));
-            float x_est = x_temp_est + K * (in - x_temp_est);  
-            float P = (1- K) * P_temp; 
+            float K = P_temp / (P_temp + R);
+            float x_est = x_est_last + K * (in - x_est_last);
+            float P = (1.0f - K) * P_temp;
            
             //update our last's 
-            P_last= P; 
+            P_last = P;
             x_est_last = x_est; 
 
             return x_est;
@@ -130,31 +124,26 @@ class  filter_kalman2
     private:
         float x_est_last ;
         float P_last ; 
-        float Q;
-        float R;
     public:
         filter_kalman2()
         {
-            Q = 0.02; 
-            R = 0.1;
-
-						#ifdef SOFT_KALMAN_GYRO_PASS2
-					  R = Q/(float)SOFT_KALMAN_GYRO_PASS2;
-            #endif
+            x_est_last = 0.0f;
+            P_last = 0.0f;
         }
         float  step( float in )   
         {    
+            static const float Q = 0.02f;
+            static const float R = 0.02f / (float)SOFT_KALMAN_GYRO_PASS2;
 
             //do a prediction 
-            float x_temp_est = x_est_last; 
             float P_temp = P_last + Q; 
 
-            float K = P_temp * (1.0f/(P_temp + R));
-            float x_est = x_temp_est + K * (in - x_temp_est);  
-            float P = (1- K) * P_temp; 
+            float K = P_temp / (P_temp + R);
+            float x_est = x_est_last + K * (in - x_est_last);
+            float P = (1.0f - K) * P_temp;
            
             //update our last's 
-            P_last= P; 
+            P_last = P;
             x_est_last = x_est; 
 
             return x_est;

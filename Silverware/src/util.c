@@ -50,12 +50,7 @@ return ga;
 }
 
 
-float mapf(float x, float in_min, float in_max, float out_min, float out_max)
-{
 
-return ((x - in_min) * (out_max - out_min)) / (in_max - in_min) + out_min;
-
-}
 
 
 void lpf( float *out, float in , float coeff)
@@ -212,4 +207,3 @@ void print_str(const char *str)
 }
 
 #endif
-
