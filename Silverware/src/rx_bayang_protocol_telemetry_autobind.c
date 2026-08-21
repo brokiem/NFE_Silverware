@@ -41,6 +41,18 @@ THE SOFTWARE.
 // packet period in uS
 #define PACKET_PERIOD 3000
 #define PACKET_PERIOD_TELEMETRY 5000
+#define TELEMETRY_EXTENDED_VERSION 0x42
+
+enum telemetry_status_flags {
+    TELEMETRY_STATUS_ARMED = 1 << 0,
+    TELEMETRY_STATUS_FAILSAFE = 1 << 1,
+    TELEMETRY_STATUS_IN_AIR = 1 << 2,
+    TELEMETRY_STATUS_IDLE_UP = 1 << 3,
+    TELEMETRY_STATUS_LEVEL = 1 << 4,
+    TELEMETRY_STATUS_RACE = 1 << 5,
+    TELEMETRY_STATUS_HORIZON = 1 << 6,
+    TELEMETRY_STATUS_LOW_BATTERY = 1 << 7,
+};
 
 // was 250 ( uS )
 #define PACKET_OFFSET 0
@@ -308,15 +320,23 @@ void beacon_sequence()
 extern int lowbatt;
 extern float vbattfilt;
 extern float vbatt_comp;
+extern int armed_state;
+extern int idle_state;
+extern int in_air;
+extern int failsafe;
+extern float throttle;
+extern float GEstG[3];
 
 void send_telemetry()
 {
+    static int telemetry_sequence;
 
     int txdata[15];
     for (int i = 0; i < 15; i++)
-        txdata[i] = i;
+        txdata[i] = 0;
     txdata[0] = 133;
     txdata[1] = lowbatt;
+    txdata[2] = TELEMETRY_EXTENDED_VERSION;
 
     int vbatt = vbattfilt * 100;
 // battery volt filtered    
@@ -333,6 +353,30 @@ void send_telemetry()
         temp = 255;
 
     txdata[7] = temp;           // rx strenght
+
+    int status = 0;
+    if (armed_state) status |= TELEMETRY_STATUS_ARMED;
+    if (failsafe) status |= TELEMETRY_STATUS_FAILSAFE;
+    if (in_air) status |= TELEMETRY_STATUS_IN_AIR;
+    if (idle_state) status |= TELEMETRY_STATUS_IDLE_UP;
+    if (aux[LEVELMODE]) status |= TELEMETRY_STATUS_LEVEL;
+    if (aux[RACEMODE]) status |= TELEMETRY_STATUS_RACE;
+    if (aux[HORIZON]) status |= TELEMETRY_STATUS_HORIZON;
+    if (lowbatt) status |= TELEMETRY_STATUS_LOW_BATTERY;
+    txdata[8] = status;
+
+    int throttle_byte = (int)(throttle * 255.0f);
+    if (throttle_byte < 0) throttle_byte = 0;
+    if (throttle_byte > 255) throttle_byte = 255;
+    txdata[9] = throttle_byte;
+
+    for (int axis = 0; axis < 3; axis++) {
+        int gravity = (int)(GEstG[axis] * 127.0f);
+        if (gravity < -127) gravity = -127;
+        if (gravity > 127) gravity = 127;
+        txdata[10 + axis] = gravity & 0xff;
+    }
+    txdata[13] = telemetry_sequence++ & 0xff;
 
     if (lowbatt)
         txdata[3] |= (1 << 3);
