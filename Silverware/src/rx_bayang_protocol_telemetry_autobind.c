@@ -329,7 +329,9 @@ extern float GEstG[3];
 
 void send_telemetry()
 {
-    static int telemetry_sequence;
+    // An eight-bit counter wraps by definition and lets the receiver detect
+    // fresh replies without a signed-overflow lifetime limit.
+    static uint8_t telemetry_sequence;
 
     int txdata[15];
     for (int i = 0; i < 15; i++)
@@ -376,7 +378,7 @@ void send_telemetry()
         if (gravity > 127) gravity = 127;
         txdata[10 + axis] = gravity & 0xff;
     }
-    txdata[13] = telemetry_sequence++ & 0xff;
+    txdata[13] = telemetry_sequence++;
 
     if (lowbatt)
         txdata[3] |= (1 << 3);

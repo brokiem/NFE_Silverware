@@ -22,5 +22,9 @@ Status flags in byte 8 are: bit 0 armed, bit 1 failsafe, bit 2 in air, bit 3
 idle-up, bit 4 level mode, bit 5 race mode, bit 6 horizon mode, and bit 7 low
 battery.
 
-The matching ESP32 host displays this data in `fpv_hud.html`. Receivers without
-the `0x42` marker still provide battery and LQI through the legacy fields.
+The matching ESP32 bridge forwards these fields through its versioned binary
+serial protocol to the native Rajawali FPV HUD. The HUD uses the gravity vector
+for its artificial horizon and gives aircraft failsafe and low-battery states
+warning priority. Receivers without the `0x42` marker still provide battery and
+link quality through the legacy fields; arm, mode, throttle, attitude, and
+in-air time remain explicitly unavailable.
