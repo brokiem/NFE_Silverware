@@ -242,7 +242,7 @@
 
 // overclock to 64Mhz
 
-//#define ENABLE_OVERCLOCK
+#define ENABLE_OVERCLOCK
 
 // used for pwm calculations
 #ifdef ENABLE_OVERCLOCK
