@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 
 
+
 #include "project.h"
 #include "drv_hw_i2c.h"
 #include "drv_time.h"
@@ -73,13 +74,21 @@ THE SOFTWARE.
 #endif
 
 #ifdef HW_I2C_SPEED_FAST2
-// 1000Khz (fast+)
+// Keep the fast+ bus at approximately 1 MHz at either system clock.
+#ifdef ENABLE_OVERCLOCK
+#define HW_I2C_TIMINGREG 0x00900b22
+#else
 #define HW_I2C_TIMINGREG 0x00700818
+#endif
 #endif
 
 #ifdef HW_I2C_SPEED_FAST
-// 400khz (fast)
+// Keep the fast bus at approximately 400 kHz at either system clock.
+#ifdef ENABLE_OVERCLOCK
+#define HW_I2C_TIMINGREG 0x00c0216c
+#else
 #define HW_I2C_TIMINGREG 0x00901850
+#endif
 #endif
 
 #ifdef HW_I2C_SPEED_SLOW1
@@ -88,8 +97,12 @@ THE SOFTWARE.
 #endif
 
 #ifdef HW_I2C_SPEED_SLOW2
-// 100Khz (slow)
+// Keep the failsafe bus at approximately 100 kHz at either system clock.
+#ifdef ENABLE_OVERCLOCK
+#define HW_I2C_TIMINGREG 0x10d05880
+#else
 #define HW_I2C_TIMINGREG 0x10805e89
+#endif
 #endif
 
 
@@ -101,8 +114,12 @@ THE SOFTWARE.
 
 // default if not set
 #ifndef HW_I2C_TIMINGREG
-// 400khz (fast)
+// Default to approximately 400 kHz at either system clock.
+#ifdef ENABLE_OVERCLOCK
+#define HW_I2C_TIMINGREG 0x00c0216c
+#else
 #define HW_I2C_TIMINGREG 0x00901850
+#endif
 #endif
 
 extern int liberror;
@@ -297,8 +314,6 @@ int hw_i2c_readreg( int reg )
 	hw_i2c_readdata( reg, &data, 1 );
 	return data;
 }
-
-
 
 
 
