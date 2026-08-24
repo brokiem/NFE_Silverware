@@ -240,9 +240,8 @@
 
 //--fpmode=fast
 
-// overclock to 64Mhz
-
-#define ENABLE_OVERCLOCK
+// Uncomment to overclock the system clock from the stock 48 MHz to 64 MHz.
+//#define ENABLE_OVERCLOCK
 
 // used for pwm calculations
 #ifdef ENABLE_OVERCLOCK
@@ -412,5 +411,4 @@
 #if defined MOTOR_MIN_COMMAND3 && defined (BRUSHLESS_TARGET)
 	#define IDLE_OFFSET  (MOTOR_MIN_COMMAND3*10)  //dshot has 2000 steps
 #endif
-
 
