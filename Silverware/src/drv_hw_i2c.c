@@ -39,7 +39,7 @@ THE SOFTWARE.
 
 
 // digital filter 0 - 15 ( 0 - off )
-#define HW_I2C_DIGITAL_FILTER 15
+#define HW_I2C_DIGITAL_FILTER 0
 
 
 // 100Khz (slow)
@@ -73,8 +73,13 @@ THE SOFTWARE.
 #endif
 
 #ifdef HW_I2C_SPEED_FAST2
+#ifdef ENABLE_OVERCLOCK
+// 1000Khz (fast+) (overclock 64Mhz)
+#define HW_I2C_TIMINGREG 0x00900b22
+#else
 // 1000Khz (fast+)
 #define HW_I2C_TIMINGREG 0x00700818
+#endif
 #endif
 
 #ifdef HW_I2C_SPEED_FAST

@@ -71,6 +71,7 @@ void clk_init(void)
 #ifdef ENABLE_OVERCLOCK
 	// set clock to 64Mhz (PLL max multiplier)
 	setclock();
+	SystemCoreClockUpdate();
 #endif
 
 	
