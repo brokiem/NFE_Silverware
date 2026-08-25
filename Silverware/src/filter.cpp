@@ -111,7 +111,7 @@ class  filter_kalman
 
             float K = P_temp * (1.0f/(P_temp + R));
             float x_est = x_temp_est + K * (in - x_temp_est);  
-            float P = (1- K) * P_temp; 
+            float P = R * K; 
            
             //update our last's 
             P_last= P; 
@@ -151,7 +151,7 @@ class  filter_kalman2
 
             float K = P_temp * (1.0f/(P_temp + R));
             float x_est = x_temp_est + K * (in - x_temp_est);  
-            float P = (1- K) * P_temp; 
+            float P = R * K; 
            
             //update our last's 
             P_last= P; 

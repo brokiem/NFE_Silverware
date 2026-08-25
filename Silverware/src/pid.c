@@ -372,10 +372,8 @@ float pid(int x )
     
     
     #ifdef ENABLE_SETPOINT_WEIGHTING
-    // P term
-    pidoutput[x] = error[x] * ( b[x])* pidkp[x];				
-    // b
-    pidoutput[x] +=  - ( 1.0f - b[x])* pidkp[x] * gyro[x];
+    // P term with setpoint weighting factored
+    pidoutput[x] = (error[x] * b[x] - (1.0f - b[x]) * gyro[x]) * pidkp[x];
     #else
     // P term with b disabled
     pidoutput[x] = error[x] * pidkp[x];
@@ -421,7 +419,7 @@ float pid(int x )
 				static float lastsetpoint[3];
         static float dlpf[3] = {0};
         
-						dterm = ((setpoint[x] - lastsetpoint[x]) * pidkd[x] * stickAccelerator[x] * transitionSetpointWeight[x] * timefactor) - ((gyro[x] - lastrate[x]) * pidkd[x] * timefactor);
+						dterm = (((setpoint[x] - lastsetpoint[x]) * stickAccelerator[x] * transitionSetpointWeight[x]) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
 						lastsetpoint[x] = setpoint [x];
 						lastrate[x] = gyro[x];	
 						lpf( &dlpf[x], dterm, FILTERCALC( 0.001 , 1.0f/DTERM_LPF_1ST_HZ ) );
@@ -461,7 +459,7 @@ float pid(int x )
 				static float lastsetpoint[3];
         float lpf2( float in, int num);
   
-						dterm = ((setpoint[x] - lastsetpoint[x]) * pidkd[x] * stickAccelerator[x] * transitionSetpointWeight[x] * timefactor) - ((gyro[x] - lastrate[x]) * pidkd[x] * timefactor);
+						dterm = (((setpoint[x] - lastsetpoint[x]) * stickAccelerator[x] * transitionSetpointWeight[x]) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
 						lastsetpoint[x] = setpoint [x];
 						lastrate[x] = gyro[x];	
             dterm = lpf2(  dterm, x );

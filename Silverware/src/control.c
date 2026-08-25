@@ -305,21 +305,22 @@ if (aux[LEVELMODE]&&!acro_override){
 		
 	}else if(!aux[RACEMODE] && aux[HORIZON]){ //horizon overrites standard level behavior	
 			//pitch and roll
+			float inclinationRoll = attitude[0];
+			float inclinationPitch = attitude[1];
+			float inclinationMax;
+			if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
+				inclinationMax = fabsf(inclinationRoll);
+			}else{
+				inclinationMax = fabsf(inclinationPitch);}
+			float angleFade;
+			// constrains acroFade variable between 0 and 1
+			if (inclinationMax <= HORIZON_ANGLE_TRANSITION){
+				angleFade = inclinationMax/HORIZON_ANGLE_TRANSITION;
+			}else{
+				angleFade = 1;
+			}
+
 			for ( int i = 0 ; i <=1; i++){	
-			  	float inclinationRoll	= attitude[0];
-					float inclinationPitch = attitude[1];
-					float inclinationMax;
-					if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
-						inclinationMax = fabsf(inclinationRoll);
-					}else{
-						inclinationMax = fabsf(inclinationPitch);}
-					float angleFade;
-					// constrains acroFade variable between 0 and 1
-					if (inclinationMax <= HORIZON_ANGLE_TRANSITION){
-						angleFade = inclinationMax/HORIZON_ANGLE_TRANSITION;
-					}else{
-						angleFade = 1;
-					}
 					float stickFade;
 					float deflection = fabsf(rxcopy[i]);
 					if (deflection <= HORIZON_STICK_TRANSITION){
