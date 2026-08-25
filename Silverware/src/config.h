@@ -135,7 +135,7 @@
 //***********************************************VOLTAGE SETTINGS*******************************************************
 
 // ************* Set your lipo cell count to override auto cell count detect logic
-//#define LIPO_CELL_COUNT 1
+#define LIPO_CELL_COUNT 1
 
 // ************* Raises pids automatically as battery voltage drops in flight.  Ensure voltage is calibrated before use ****CRITICAL****.
 #define PID_VOLTAGE_COMPENSATION
