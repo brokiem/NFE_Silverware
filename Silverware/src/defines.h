@@ -212,7 +212,7 @@
 
 // *************motor curve to use - select one
 // *************the pwm frequency has to be set independently
-#define MOTOR_CURVE_NONE
+#define MOTOR_CURVE_85MM_32KHZ
 
 // loop time in uS
 // this affects soft gyro lpf frequency if used

@@ -215,8 +215,8 @@
 //#define PT1_GYRO
 
 //Select Gyro Filter Cut Frequency
-#define GYRO_FILTER_PASS1 HZ_90
-#define GYRO_FILTER_PASS2 HZ_90
+#define GYRO_FILTER_PASS1 HZ_70
+#define GYRO_FILTER_PASS2 HZ_70
 
 //Select D Term Filter Cut Frequency *** Select Only one
 #define  DTERM_LPF_2ND_HZ 100
