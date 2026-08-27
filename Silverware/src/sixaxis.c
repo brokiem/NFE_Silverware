@@ -95,11 +95,20 @@ void sixaxis_init( void)
 }
 
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+uint8_t telemetry_imu_type;
+int16_t telemetry_imu_temperature_raw;
+#endif
+
 int sixaxis_check( void)
 {
 	#ifndef DISABLE_GYRO_CHECK
 	// read "who am I" register
 	int id = i2c_readreg( 117 );
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+	telemetry_imu_type = id;
+#endif
 
 	#ifdef DEBUG
 	debug.gyroid = id;
@@ -131,6 +140,10 @@ void sixaxis_read(void)
 	float gyronew[3];
 	
 	i2c_readdata( 59 , data , 14 );
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+	telemetry_imu_temperature_raw = (int16_t)((data[6] << 8) + data[7]);
+#endif
 		
 #ifdef SENSOR_ROTATE_90_CW	         
         accel[0] = (int16_t) ((data[2] << 8) + data[3]);
@@ -516,8 +529,6 @@ void acc_cal(void)
 #endif
 		
 }
-
-
 
 
 

@@ -128,6 +128,10 @@ void vectorcopy(float *vector1, float *vector2)
 
 extern float looptime;
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+float telemetry_accel_g[3];
+#endif
+
 
 void imu_calc(void)
 {
@@ -143,6 +147,9 @@ void imu_calc(void)
     for (int i = 0; i < 3; i++)
 	  {
 		  accel[i] *= ( 1/ 2048.0f);
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+		  telemetry_accel_g[i] = accel[i];
+#endif
 	  }
   
       
@@ -255,4 +262,3 @@ float atan2approx(float y, float x)
 		dphi -= 2 * M_PI;
 	return RADTODEG * dphi;
 }
-

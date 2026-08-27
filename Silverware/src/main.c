@@ -94,6 +94,14 @@ float vreffilt = 1.0;
 float thrfilt = 0;
 
 unsigned int lastlooptime;
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+uint32_t telemetry_loop_time_sum_us;
+uint32_t telemetry_loop_work_sum_us;
+uint16_t telemetry_loop_time_max_us;
+uint16_t telemetry_loop_samples;
+uint16_t telemetry_loop_overruns;
+#endif
 // signal for lowbattery
 int lowbatt = 1;	
 
@@ -313,6 +321,15 @@ if ( liberror )
 		lpf ( &debug.timefilt , looptime, 0.998 );
 		#endif
 		lastlooptime = time;
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+		uint32_t telemetry_loop_us = (uint32_t)(looptime * 1000000.0f + 0.5f);
+		telemetry_loop_time_sum_us += telemetry_loop_us;
+		if (telemetry_loop_us > telemetry_loop_time_max_us)
+			telemetry_loop_time_max_us = telemetry_loop_us > 65535U ? 65535U : telemetry_loop_us;
+		if (telemetry_loop_samples < 65535U)
+			telemetry_loop_samples++;
+#endif
 		
 		if ( liberror > 20) 
 		{
@@ -565,6 +582,13 @@ checkrx();
 	debug.cpu_load = (gettime() - lastlooptime )*1e-3f;
 #endif
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+	uint32_t telemetry_work_us = (uint32_t)(gettime() - time);
+	telemetry_loop_work_sum_us += telemetry_work_us;
+	if (telemetry_work_us > LOOPTIME && telemetry_loop_overruns < 65535U)
+		telemetry_loop_overruns++;
+#endif
+
 while ( (gettime() - time) < LOOPTIME );	
 
 		
@@ -678,6 +702,5 @@ void EXTI4_15_IRQHandler(void)
 	}
 }
 #endif
-
 
 

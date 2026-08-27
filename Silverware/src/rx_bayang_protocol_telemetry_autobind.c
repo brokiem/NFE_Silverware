@@ -248,6 +248,20 @@ int afterskip[12];
 int packetrx;
 int packetpersecond;
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+uint8_t telemetry_packets_lost_window;
+uint8_t telemetry_link_quality;
+uint8_t telemetry_current_gap_100us;
+uint8_t telemetry_failsafe_count;
+uint16_t telemetry_max_gap_100us;
+uint32_t telemetry_rx_total;
+uint32_t telemetry_lost_total;
+uint32_t telemetry_tx_total;
+static uint16_t telemetry_max_gap_window_100us;
+static uint32_t telemetry_last_valid_rx_time;
+static int telemetry_previous_failsafe = 1;
+#endif
+
 
 void send_telemetry(void);
 void nextchannel(void);
@@ -309,6 +323,246 @@ extern int lowbatt;
 extern float vbattfilt;
 extern float vbatt_comp;
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+
+#define EXTENDED_TELEMETRY_HEADER 0x86
+#define EXTENDED_TELEMETRY_CONTROL 0
+#define EXTENDED_TELEMETRY_FLIGHT 1
+#define EXTENDED_TELEMETRY_POWER 2
+#define EXTENDED_TELEMETRY_SYSTEM 3
+
+extern float GEstG[3];
+extern float gyro[3];
+extern float telemetry_accel_g[3];
+extern float setpoint[3];
+extern float rx[4];
+extern float throttle;
+extern float telemetry_motor_output[4];
+extern float telemetry_relative_yaw_deg;
+extern int armed_state;
+extern int onground;
+extern int failsafe;
+extern int idle_state;
+extern uint8_t telemetry_imu_type;
+extern int16_t telemetry_imu_temperature_raw;
+extern uint32_t telemetry_loop_time_sum_us;
+extern uint32_t telemetry_loop_work_sum_us;
+extern uint16_t telemetry_loop_time_max_us;
+extern uint16_t telemetry_loop_samples;
+extern uint16_t telemetry_loop_overruns;
+extern float atan2approx(float y, float x);
+
+static uint16_t telemetry_flight_seconds;
+static uint32_t telemetry_flight_remainder_us;
+static uint32_t telemetry_flight_last_us;
+static int telemetry_was_flying;
+
+static void telemetry_write_bits(int *data, uint8_t *bit_offset, uint32_t value, uint8_t bit_count)
+{
+    for (int bit = bit_count - 1; bit >= 0; bit--)
+      {
+        uint8_t byte_index = 2 + (*bit_offset >> 3);
+        uint8_t byte_bit = 7 - (*bit_offset & 7);
+        if (value & (1UL << bit))
+            data[byte_index] |= 1 << byte_bit;
+        (*bit_offset)++;
+      }
+}
+
+static uint32_t telemetry_signed(float value, float resolution, uint8_t bits)
+{
+    float scaled = value / resolution;
+    int32_t quantized = (int32_t)(scaled + (scaled >= 0.0f ? 0.5f : -0.5f));
+    int32_t minimum = -(1L << (bits - 1));
+    int32_t maximum = (1L << (bits - 1)) - 1;
+    if (quantized < minimum)
+        quantized = minimum;
+    if (quantized > maximum)
+        quantized = maximum;
+    return (uint32_t)quantized & ((1UL << bits) - 1UL);
+}
+
+static uint32_t telemetry_unit_float(float value, uint8_t bits)
+{
+    if (value <= 0.0f)
+        return 0;
+    if (value >= 1.0f)
+        return (1UL << bits) - 1UL;
+    return (uint32_t)(value * (float)((1UL << bits) - 1UL) + 0.5f);
+}
+
+static uint16_t telemetry_u16(float value)
+{
+    if (value <= 0.0f)
+        return 0;
+    if (value >= 65535.0f)
+        return 65535;
+    return (uint16_t)(value + 0.5f);
+}
+
+static void telemetry_update_flight_time(void)
+{
+    uint32_t now = (uint32_t)gettime();
+    int flying = armed_state && !onground;
+
+    if (flying && !telemetry_was_flying)
+      {
+        telemetry_flight_seconds = 0;
+        telemetry_flight_remainder_us = 0;
+        telemetry_flight_last_us = now;
+      }
+    else if (flying)
+      {
+        telemetry_flight_remainder_us += (uint32_t)(now - telemetry_flight_last_us);
+        telemetry_flight_last_us = now;
+        while (telemetry_flight_remainder_us >= 1000000U && telemetry_flight_seconds < 65535U)
+          {
+            telemetry_flight_remainder_us -= 1000000U;
+            telemetry_flight_seconds++;
+          }
+      }
+    else
+      {
+        telemetry_flight_last_us = now;
+      }
+
+    telemetry_was_flying = flying;
+}
+
+static void telemetry_write_control(int *txdata)
+{
+    uint8_t offset = 0;
+    for (int axis = 0; axis < 3; axis++)
+        telemetry_write_bits(txdata, &offset, telemetry_signed(gyro[axis] * RADTODEG, 4.0f, 10), 10);
+    for (int axis = 0; axis < 3; axis++)
+        telemetry_write_bits(txdata, &offset, telemetry_signed(setpoint[axis] * RADTODEG, 4.0f, 10), 10);
+    telemetry_write_bits(txdata, &offset, telemetry_unit_float(rx[3], 6), 6);
+    telemetry_write_bits(txdata, &offset, telemetry_unit_float(throttle, 6), 6);
+    for (int motor = 0; motor < 4; motor++)
+        telemetry_write_bits(txdata, &offset, telemetry_unit_float(telemetry_motor_output[motor], 6), 6);
+}
+
+static void telemetry_write_flight(int *txdata)
+{
+    uint8_t offset = 0;
+    uint8_t flags = 0;
+    float roll = atan2approx(GEstG[0], GEstG[2]);
+    float pitch = atan2approx(GEstG[1], GEstG[2]);
+    telemetry_write_bits(txdata, &offset, telemetry_signed(roll, 0.1f, 12), 12);
+    telemetry_write_bits(txdata, &offset, telemetry_signed(pitch, 0.1f, 12), 12);
+    telemetry_write_bits(txdata, &offset, telemetry_signed(telemetry_relative_yaw_deg, 0.1f, 12), 12);
+    for (int axis = 0; axis < 3; axis++)
+        telemetry_write_bits(txdata, &offset, telemetry_signed(telemetry_accel_g[axis], 1.0f / 256.0f, 12), 12);
+    telemetry_write_bits(txdata, &offset, telemetry_flight_seconds, 16);
+    if (onground)
+        flags |= 1 << 0;
+    if (idle_state)
+        flags |= 1 << 1;
+    if (lowbatt)
+        flags |= 1 << 2;
+#ifdef LEVELMODE
+    if (aux[LEVELMODE])
+        flags |= 1 << 3;
+#endif
+#ifdef RACEMODE
+    if (aux[RACEMODE])
+        flags |= 1 << 4;
+#endif
+#ifdef HORIZON
+    if (aux[HORIZON])
+        flags |= 1 << 5;
+#endif
+#ifdef PIDPROFILE
+    if (aux[PIDPROFILE])
+        flags |= 1 << 6;
+#endif
+    telemetry_write_bits(txdata, &offset, flags, 8);
+}
+
+static void telemetry_write_power(int *txdata)
+{
+    uint8_t offset = 0;
+    uint8_t battery_flags = lowbatt ? 1 : 0;
+    uint8_t rx_rate = packetpersecond > 255 ? 255 : (uint8_t)packetpersecond;
+    telemetry_write_bits(txdata, &offset, telemetry_u16(vbattfilt * 1000.0f), 16);
+    telemetry_write_bits(txdata, &offset, telemetry_u16(vbatt_comp * 1000.0f), 16);
+    telemetry_write_bits(txdata, &offset, rx_rate, 8);
+    telemetry_write_bits(txdata, &offset, telemetry_packets_lost_window, 8);
+    telemetry_write_bits(txdata, &offset, telemetry_link_quality, 8);
+    telemetry_write_bits(txdata, &offset, battery_flags, 8);
+    telemetry_write_bits(txdata, &offset, telemetry_max_gap_100us, 16);
+    telemetry_write_bits(txdata, &offset, telemetry_current_gap_100us, 8);
+    telemetry_write_bits(txdata, &offset, telemetry_failsafe_count, 8);
+}
+
+static void telemetry_write_system(int *txdata)
+{
+    static int counters_subpage;
+    uint8_t offset = 0;
+    telemetry_write_bits(txdata, &offset, counters_subpage, 1);
+    if (!counters_subpage)
+      {
+        uint16_t samples = telemetry_loop_samples;
+        uint32_t average = samples ? telemetry_loop_time_sum_us / samples : 0;
+        uint32_t cpu_load = samples ? telemetry_loop_work_sum_us * 100U / ((uint32_t)samples * LOOPTIME) : 0;
+        if (average > 65535U)
+            average = 65535U;
+        if (cpu_load > 100U)
+            cpu_load = 100U;
+        telemetry_write_bits(txdata, &offset, average, 16);
+        telemetry_write_bits(txdata, &offset, telemetry_loop_time_max_us, 16);
+        telemetry_write_bits(txdata, &offset, telemetry_loop_overruns, 16);
+        telemetry_write_bits(txdata, &offset, (uint16_t)telemetry_imu_temperature_raw, 16);
+        telemetry_write_bits(txdata, &offset, telemetry_imu_type, 8);
+        telemetry_write_bits(txdata, &offset, cpu_load, 8);
+        telemetry_write_bits(txdata, &offset, telemetry_tx_total & 0x7fffU, 15);
+        telemetry_loop_time_sum_us = 0;
+        telemetry_loop_work_sum_us = 0;
+        telemetry_loop_time_max_us = 0;
+        telemetry_loop_samples = 0;
+      }
+    else
+      {
+        telemetry_write_bits(txdata, &offset, telemetry_rx_total, 32);
+        telemetry_write_bits(txdata, &offset, telemetry_lost_total, 32);
+        telemetry_write_bits(txdata, &offset, telemetry_tx_total & 0x7fffffffU, 31);
+      }
+    counters_subpage = !counters_subpage;
+}
+
+static void telemetry_write_extended_packet(int *txdata)
+{
+    static const uint8_t page_cycle[8] = {
+        EXTENDED_TELEMETRY_CONTROL, EXTENDED_TELEMETRY_FLIGHT,
+        EXTENDED_TELEMETRY_CONTROL, EXTENDED_TELEMETRY_POWER,
+        EXTENDED_TELEMETRY_CONTROL, EXTENDED_TELEMETRY_FLIGHT,
+        EXTENDED_TELEMETRY_CONTROL, EXTENDED_TELEMETRY_SYSTEM,
+    };
+    static uint8_t cycle_index;
+    static uint8_t sequence;
+    uint8_t page = page_cycle[cycle_index];
+    cycle_index = (cycle_index + 1) & 7;
+
+    telemetry_update_flight_time();
+    txdata[0] = EXTENDED_TELEMETRY_HEADER;
+    for (int index = 1; index < 14; index++)
+        txdata[index] = 0;
+    txdata[1] = (page << 6) | (armed_state ? 1 << 5 : 0) | (failsafe ? 1 << 4 : 0) | (sequence & 0x0f);
+    sequence = (sequence + 1) & 0x0f;
+
+    if (page == EXTENDED_TELEMETRY_CONTROL)
+        telemetry_write_control(txdata);
+    else if (page == EXTENDED_TELEMETRY_FLIGHT)
+        telemetry_write_flight(txdata);
+    else if (page == EXTENDED_TELEMETRY_POWER)
+        telemetry_write_power(txdata);
+    else
+        telemetry_write_system(txdata);
+    telemetry_tx_total++;
+}
+
+#endif
+
 void send_telemetry()
 {
 
@@ -336,6 +590,10 @@ void send_telemetry()
 
     if (lowbatt)
         txdata[3] |= (1 << 3);
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+    telemetry_write_extended_packet(txdata);
+#endif
 
     int sum = 0;
     for (int i = 0; i < 14; i++)
@@ -601,6 +859,20 @@ void checkrx(void)
 
                 if (pass)
                   {
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+                      if (telemetry_last_valid_rx_time != 0)
+                        {
+                          uint32_t gap_100us = (uint32_t)(temptime - telemetry_last_valid_rx_time) / 100U;
+                          if (gap_100us > 255U)
+                              telemetry_current_gap_100us = 255U;
+                          else
+                              telemetry_current_gap_100us = (uint8_t)gap_100us;
+                          if (gap_100us > telemetry_max_gap_window_100us)
+                              telemetry_max_gap_window_100us = gap_100us > 65535U ? 65535U : (uint16_t)gap_100us;
+                        }
+                      telemetry_last_valid_rx_time = temptime;
+                      telemetry_rx_total++;
+#endif
                       packetrx++;
                       if (telemetry_enabled)
                           beacon_sequence();
@@ -673,6 +945,12 @@ void checkrx(void)
           rx[2] = 0;
           rx[3] = 0;
       }
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+    if (failsafe && !telemetry_previous_failsafe && telemetry_failsafe_count < 255U)
+        telemetry_failsafe_count++;
+    telemetry_previous_failsafe = failsafe;
+#endif
       
     if ( !failsafe) autobind_inhibit = 1;
       else if ( !autobind_inhibit && time - autobindtime > 15000000 )
@@ -689,6 +967,16 @@ void checkrx(void)
     if (gettime() - secondtimer > 1000000)
       {
           packetpersecond = packetrx;
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+          int lost = 200 - packetpersecond;
+          if (lost < 0)
+              lost = 0;
+          telemetry_packets_lost_window = lost > 255 ? 255 : (uint8_t)lost;
+          telemetry_link_quality = packetpersecond >= 200 ? 100 : (uint8_t)(packetpersecond * 100 / 200);
+          telemetry_max_gap_100us = telemetry_max_gap_window_100us;
+          telemetry_max_gap_window_100us = 0;
+          telemetry_lost_total += (uint32_t)lost;
+#endif
           packetrx = 0;
           secondtimer = gettime();
       }

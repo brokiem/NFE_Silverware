@@ -62,6 +62,12 @@ int onground_long = 1;
 
 float thrsum;
 
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+float telemetry_motor_output[4];
+float telemetry_relative_yaw_deg;
+static int telemetry_was_flying;
+#endif
+
 float error[PIDNUMBER];
 float motormap( float input);
 
@@ -496,6 +502,10 @@ if (aux[CH_AUX1]){
 		throttle = 0;										//zero out throttle so it does not come back on as idle up value if enabled			
 		onground = 1;
 		thrsum = 0;
+		#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+		for (int i = 0; i < 4; i++)
+			telemetry_motor_output[i] = 0.0f;
+		#endif
 		
 	}
 	else
@@ -1005,12 +1015,30 @@ thrsum = 0;		//reset throttle sum for voltage monitoring logic in main loop
 //***********************Clip mmixer outputs (if not already done) before applying calculating throttle sum
 		if ( mix[i] < 0 ) mix[i] = 0;
 		if ( mix[i] > 1 ) mix[i] = 1;
+		#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+		telemetry_motor_output[i] = mix[i];
+		#endif
 		thrsum+= mix[i];
 		}	
 // end of for-loop to send motor PWM commands
 		thrsum = thrsum / 4;		//calculate throttle sum for voltage monitoring logic in main loop		
 	}
 // end motors on
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+	int telemetry_flying = armed_state && !onground;
+	if (telemetry_flying && !telemetry_was_flying)
+		telemetry_relative_yaw_deg = 0.0f;
+	else if (telemetry_flying)
+	  {
+		telemetry_relative_yaw_deg += gyro[2] * looptime * RADTODEG;
+		if (telemetry_relative_yaw_deg > 180.0f)
+			telemetry_relative_yaw_deg -= 360.0f;
+		else if (telemetry_relative_yaw_deg < -180.0f)
+			telemetry_relative_yaw_deg += 360.0f;
+	  }
+	telemetry_was_flying = telemetry_flying;
+#endif
 	
 }
 // end of control function
@@ -1142,4 +1170,3 @@ float clip_ff(float motorin, int number)
         
     return in + out;
  }
-

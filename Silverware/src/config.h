@@ -83,6 +83,11 @@
 //#define RX_NRF24_BAYANG_TELEMETRY
 //#define RX_BAYANG_BLE_APP
 #define RX_BAYANG_PROTOCOL_TELEMETRY_AUTOBIND
+#define RX_BAYANG_EXTENDED_TELEMETRY
+
+#if defined(RX_BAYANG_EXTENDED_TELEMETRY) && !defined(RX_BAYANG_PROTOCOL_TELEMETRY_AUTOBIND)
+#error "RX_BAYANG_EXTENDED_TELEMETRY requires RX_BAYANG_PROTOCOL_TELEMETRY_AUTOBIND"
+#endif
 
 // *************Transmitter Type Selection
 //#define USE_STOCK_TX
@@ -383,7 +388,6 @@
 
 // debug things ( debug struct and other)
 //#define DEBUG
-
 
 
 

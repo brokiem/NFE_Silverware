@@ -143,6 +143,8 @@ The gesture for accel calibration is down - down - down. If pids have been chang
 ### Telemetry
 DeviationTx and multimodule+taranis can support telemetry, this requires no changes from the defaults on the quad. For devo, when selecting the Bayang protocol, hit Enter to see options, and enable telemetry there. Telemetry currently contains received number of data and telemetry packets, and 2 voltages, battery raw voltage and compensated voltage ( against voltage drop )
 
+When `RX_BAYANG_PROTOCOL_TELEMETRY_AUTOBIND` is selected, defining `RX_BAYANG_EXTENDED_TELEMETRY` enables the 15-byte `0x86` extended format. A common status byte and 96-bit payload rotate in the deterministic `A B A C A B A D` schedule: control at 100 Hz, flight state at 50 Hz, power/link at 25 Hz, and alternating system-health subpages at 12.5 Hz each. Removing the extended define restores the original `0x85` packet layout byte for byte. Compatible transmitters detect either header automatically.
+
 For multimodule, you need to add telemetry ( as an option ) to the bayang protocol in the protocol table ( configuration file ). Note the telemetry protocol won't work with stock quads.
 
 *See also*
