@@ -21,7 +21,7 @@ float apidkd1[APIDNUMBER] = { 3.0 };    // D TERM GAIN ROLL + PITCH
 
 // Leveling algorithm coefficients for large errors  (stick banging or collisions)
 float apidkp2[APIDNUMBER] = { 5.00 };   // P TERM GAIN ROLL + PITCH 
-float apidkd2[APIDNUMBER] = { 0.0 };    // D TERM GAIN ROLL + PITCH
+const float apidkd2[APIDNUMBER] = { 0.0 }; // D2 is source-configured; const lets Cortex-M0 builds remove the zero term
 
 
 
@@ -39,24 +39,29 @@ float apidoutput[APIDNUMBER];
 
 float apid(int x)
 {
+	// Cache values shared by both weighted branches.
+	float e = angleerror[x];
+	float abs_error = fabsf(e);
+	float one_minus_abs_error = 1.0f - abs_error;
+	float delta_error = e - lasterror[x];
 
 	// P term 1 weighted
-	apidoutput1[x] = (1-fabsf(angleerror[x])) * angleerror[x] * apidkp1[0] ;
+	apidoutput1[x] = one_minus_abs_error * e * apidkp1[0] ;
 	
 	// P term 2 weighted
-	apidoutput2[x] = fabsf(angleerror[x]) * angleerror[x] * apidkp2[0];  
+	apidoutput2[x] = abs_error * e * apidkp2[0];
 	
 extern float timefactor;
 	// D term 1 weighted + P term 1 weighted
-	apidoutput1[x] += (angleerror[x] - lasterror[x]) * apidkd1[0] * (1-fabsf(angleerror[x])) * timefactor;
+	apidoutput1[x] += delta_error * apidkd1[0] * one_minus_abs_error * timefactor;
 	
 	// D term 2 weighted + P term 2 weighted
-	apidoutput2[x] += ((angleerror[x] - lasterror[x]) * apidkd2[0] * fabsf(angleerror[x]) * timefactor);
+	apidoutput2[x] += (delta_error * apidkd2[0] * abs_error * timefactor);
 	
   // apidoutput sum
 	apidoutput[x] = apidoutput1[x] + apidoutput2[x];
 	
-  lasterror[x] = angleerror[x];
+	lasterror[x] = e;
 	limitf(&apidoutput[x], OUTLIMIT_FLOAT);	
 	
 	return apidoutput[x];

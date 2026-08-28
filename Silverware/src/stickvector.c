@@ -18,6 +18,10 @@ float errorvect[3];
 // cache the last result so it does not get calculated everytime
 float last_rx[2] = {13.13f , 12.12f};
 float stickvector[3] = { 0 , 0 , 1};
+// True only when the actual post-trim/post-normalization stick vector has
+// exactly zero roll and pitch components. This keeps trims and analog max
+// angle behavior on the full cross-product path.
+static unsigned char stickvector_centered = 1;
 
 
 
@@ -73,12 +77,27 @@ if ( pwmdir==REVERSE )
 	stickvector[2] = - stickvector[2];
 }
 #endif
+
+// Cache the common centered-stick case after all transformations. Exact
+// zero checks are intentional: any trim or non-zero stick component keeps
+// the original full cross product.
+stickvector_centered = (stickvector[0] == 0.0f && stickvector[1] == 0.0f);
 }
 
 // find error between stick vector and quad orientation
-// vector cross product 
+// vector cross product
+if (stickvector_centered)
+{
+	// Algebraic specialization of the original cross product for
+	// stickvector[0] == stickvector[1] == 0.0f.
+	errorvect[1] = -(GEstG[1] * stickvector[2]);
+	errorvect[0] = -(GEstG[0] * stickvector[2]);
+}
+else
+{
   errorvect[1]= -((GEstG[1]*stickvector[2]) - (GEstG[2]*stickvector[1]));
   errorvect[0]= (GEstG[2]*stickvector[0]) - (GEstG[0]*stickvector[2]);
+}
 
 // some limits just in case
 

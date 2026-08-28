@@ -332,6 +332,8 @@ extern float vbatt_comp;
 #define EXTENDED_TELEMETRY_SYSTEM 3
 
 extern float GEstG[3];
+extern float attitude[3];
+extern uint8_t telemetry_attitude_horizon_state;
 extern float gyro[3];
 extern float telemetry_accel_g[3];
 extern float setpoint[3];
@@ -446,8 +448,25 @@ static void telemetry_write_flight(int *txdata)
 {
     uint8_t offset = 0;
     uint8_t flags = 0;
-    float roll = atan2approx(GEstG[0], GEstG[2]);
-    float pitch = atan2approx(GEstG[1], GEstG[2]);
+        float roll;
+        float pitch;
+
+        // Horizon already calculated these angles in imu_calc() earlier in the
+        // loop. Reuse them only if Horizon was also active at that exact IMU pass.
+        // If a new RX packet changed the mode later in this loop, fall back to the
+        // original calculation so telemetry never publishes stale attitude data.
+#ifdef HORIZON
+        if (aux[HORIZON] && telemetry_attitude_horizon_state)
+            {
+                roll = attitude[0];
+                pitch = attitude[1];
+            }
+        else
+#endif
+            {
+                roll = atan2approx(GEstG[0], GEstG[2]);
+                pitch = atan2approx(GEstG[1], GEstG[2]);
+            }
     telemetry_write_bits(txdata, &offset, telemetry_signed(roll, 0.1f, 12), 12);
     telemetry_write_bits(txdata, &offset, telemetry_signed(pitch, 0.1f, 12), 12);
     telemetry_write_bits(txdata, &offset, telemetry_signed(telemetry_relative_yaw_deg, 0.1f, 12), 12);

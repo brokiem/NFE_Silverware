@@ -135,6 +135,10 @@ extern float looptime;
 
 #ifdef RX_BAYANG_EXTENDED_TELEMETRY
 float telemetry_accel_g[3];
+// Records whether attitude[] was calculated for Horizon during this imu_calc()
+// pass. Telemetry compares it with the current aux state so a mode switch that
+// arrives later in checkrx() cannot reuse stale angles.
+uint8_t telemetry_attitude_horizon_state;
 #endif
 
 
@@ -228,11 +232,17 @@ extern int onground;
   }
 
 extern char aux[AUXNUMBER];
-if (aux[HORIZON]){
+int horizon_active = aux[HORIZON];
+if (horizon_active){
 	attitude[0] = atan2approx(GEstG[0], GEstG[2]) ;
 
 	attitude[1] = atan2approx(GEstG[1], GEstG[2])  ;
 }
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+// checkrx() runs after imu_calc(), so aux[HORIZON] can change later in the
+// same loop. Saving the state used here lets telemetry detect that edge case.
+telemetry_attitude_horizon_state = (uint8_t)horizon_active;
+#endif
 }
 
 
