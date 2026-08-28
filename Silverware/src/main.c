@@ -85,6 +85,31 @@ extern void flash_hard_coded_pid_identifier(void);
 
 // looptime in seconds
 float looptime;
+
+// The loop timer is integer microseconds and normally repeats one of a very
+// small number of values (about 1000/1001 us).  Cortex-M0 has no FPU, so the
+// uint32->float conversion and multiply are software helpers.  Cache the last
+// two exact conversions; misses execute the original expression unchanged.
+static float loop_seconds_cached_m0(uint32_t loop_us)
+{
+	static uint32_t key[2];
+	static float value[2];
+	static uint8_t valid_mask;
+	static uint8_t replace_slot;
+
+	if ((valid_mask & 1U) && key[0] == loop_us)
+		return value[0];
+	if ((valid_mask & 2U) && key[1] == loop_us)
+		return value[1];
+
+	float seconds = (float)loop_us * 1e-6f;
+	uint8_t slot = replace_slot;
+	key[slot] = loop_us;
+	value[slot] = seconds;
+	valid_mask |= (uint8_t)(1U << slot);
+	replace_slot ^= 1U;
+	return seconds;
+}
 // filtered battery in volts
 float vbattfilt = 0.0;
 float vbatt_comp = 4.2;
@@ -309,7 +334,7 @@ if ( liberror )
 		unsigned long time = gettime();
         uint32_t loop_us = (uint32_t)(time - lastlooptime);
         if (loop_us == 0U) loop_us = 1U;
-        looptime = (float)loop_us * 1e-6f;
+		looptime = loop_seconds_cached_m0(loop_us);
 		if ( loop_us > 20000U ) // max loop 20ms
 		{
 			failloop( 6);	

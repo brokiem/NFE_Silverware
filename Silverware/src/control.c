@@ -129,6 +129,55 @@ static inline float clip01f_m0(float input)
 }
 #endif
 
+static inline uint32_t float_bits_control_m0(float value)
+{
+	union { float f; uint32_t u; } bits;
+	bits.f = value;
+	return bits.u;
+}
+
+static inline float float_from_bits_control_m0(uint32_t value)
+{
+	union { float f; uint32_t u; } bits;
+	bits.u = value;
+	return bits.f;
+}
+
+static inline uint32_t float_abs_bits_control_m0(float value)
+{
+	return float_bits_control_m0(value) & 0x7fffffffU;
+}
+
+// Bit-exact IEEE-754 equivalent of value < 0.0f, including -0/NaN handling.
+static inline int float_lt_zero_control_m0(float value)
+{
+	uint32_t bits = float_bits_control_m0(value);
+	uint32_t magnitude = bits & 0x7fffffffU;
+	return (bits & 0x80000000U) && magnitude != 0U &&
+		magnitude <= 0x7f800000U;
+}
+
+// Matches: if (fabsf(a) >= fabsf(b)) fabsf(a); else fabsf(b).
+// For NaN operands the float comparison is false, so the original selects b.
+static inline uint32_t max_abs_bits_control_m0(float a, float b)
+{
+	uint32_t a_abs = float_abs_bits_control_m0(a);
+	uint32_t b_abs = float_abs_bits_control_m0(b);
+	if (a_abs > 0x7f800000U || b_abs > 0x7f800000U)
+		return b_abs;
+	return a_abs >= b_abs ? a_abs : b_abs;
+}
+
+// This fast cache is valid only when rxcopy/rates have no other runtime
+// modifiers.  That is the active BWHOOP configuration: fixed CHAN_ON rates,
+// no stock autocenter, no Betaflight rates and the flip sequencer disabled.
+#if defined(DISABLE_FLIP_SEQUENCER) && !defined(STOCK_TX_AUTOCENTER) && \
+	!defined(BETAFLIGHT_RATES) && \
+	!(defined(USE_ANALOG_AUX) && defined(ANALOG_RATE_MULT)) && \
+	(RATES == CHAN_ON)
+#define M0_RX_DERIVED_CACHE
+#endif
+
 #ifdef BETAFLIGHT_RATES
 #define SETPOINT_RATE_LIMIT 1998.0f
 #define RC_RATE_INCREMENTAL 14.54f
@@ -191,16 +240,51 @@ float rate_multiplier = 1.0f;
         pwmdir = FORWARD;    
 #endif	
 	
+#ifdef M0_RX_DERIVED_CACHE
+	static uint32_t last_rx_bits[3];
+	static uint8_t rx_cache_valid;
+	static float rates[3];
+	int rx_changed = !rx_cache_valid;
+	if (!rx_changed)
+	  {
+		for (int i = 0; i < 3; i++)
+		  {
+			if (float_bits_control_m0(rx[i]) != last_rx_bits[i])
+			  {
+				rx_changed = 1;
+				break;
+			  }
+		  }
+	  }
+	if (rx_changed)
+	  {
+		for (int i = 0; i < 3; i++)
+		  {
+			last_rx_bits[i] = float_bits_control_m0(rx[i]);
+			rxcopy[i] = rx[i];
+			limitf(&rxcopy[i], 1.0f);
+#ifdef STICKS_DEADBAND
+			if (fabsf(rxcopy[i]) <= STICKS_DEADBAND)
+				rxcopy[i] = 0.0f;
+			else if (rxcopy[i] >= 0.0f)
+				rxcopy[i] = mapf(rxcopy[i], STICKS_DEADBAND, 1, 0, 1);
+			else
+				rxcopy[i] = mapf(rxcopy[i], -STICKS_DEADBAND, -1, 0, -1);
+#endif
+		  }
+		rx_cache_valid = 1U;
+	  }
+#else
 	for ( int i = 0 ; i < 3 ; i++)
-	{
-		#ifdef STOCK_TX_AUTOCENTER
+	  {
+#ifdef STOCK_TX_AUTOCENTER
 		rxcopy[i] = (rx[i] - autocenter[i]);
 		limitf(&rxcopy[i], 1.0);
-		#else
+#else
 		rxcopy[i] = rx[i];
 		limitf(&rxcopy[i], 1.0);
-		#endif
-		#ifdef STICKS_DEADBAND
+#endif
+#ifdef STICKS_DEADBAND
 		if ( fabsf( rxcopy[ i ] ) <= STICKS_DEADBAND ) {
 			rxcopy[ i ] = 0.0f;
 		} else {
@@ -210,8 +294,9 @@ float rate_multiplier = 1.0f;
 				rxcopy[ i ] = mapf( rxcopy[ i ], -STICKS_DEADBAND, -1, 0, -1 );
 			}
 		}
-		#endif
-	 }
+#endif
+	  }
+#endif
 
 #ifndef DISABLE_FLIP_SEQUENCER	
   flip_sequencer();
@@ -238,8 +323,15 @@ pid_precalc();
 
 	// flight control
 
+#ifdef M0_RX_DERIVED_CACHE
+	if (rx_changed)
+	  {
+		rates[0] = rxcopy[0] * (float) MAX_RATE * DEGTORAD;
+		rates[1] = rxcopy[1] * (float) MAX_RATE * DEGTORAD;
+		rates[2] = rxcopy[2] * (float) MAX_RATEYAW * DEGTORAD;
+	  }
+#else
 	float rates[3];
-
 #ifndef BETAFLIGHT_RATES
 #if (defined USE_ANALOG_AUX && defined ANALOG_RATE_MULT) || (RATES != CHAN_ON)
     rates[0] = rate_multiplier * rxcopy[0] * (float) MAX_RATE * DEGTORAD;
@@ -262,6 +354,7 @@ pid_precalc();
     rates[2] = calcBFRatesRad(2);
 #endif
 #endif
+#endif
         
 if (aux[LEVELMODE]&&!acro_override){
 	extern void stick_vector( float rx_input[] , float maxangle);
@@ -274,6 +367,7 @@ if (aux[LEVELMODE]&&!acro_override){
 	yawerror[0] = GEstG[1] * rates[2];
 	yawerror[1] = - GEstG[0] * rates[2];
 	yawerror[2] = GEstG[2] * rates[2];
+	int inverted = float_lt_zero_control_m0(GEstG[2]);
 	
 	
 	// *************************************************************************
@@ -290,7 +384,7 @@ if (aux[LEVELMODE]&&!acro_override){
 	
 	
 	if (aux[RACEMODE] && !aux[HORIZON]){ //racemode with angle behavior on roll ais
-			if (GEstG[2] < 0 ){ // acro on roll and pitch when inverted
+			if (inverted){ // acro on roll and pitch when inverted
 					error[0] = rates[0] - gyro[0];
 					error[1] = rates[1] - gyro[1];
 			}else{
@@ -305,26 +399,24 @@ if (aux[LEVELMODE]&&!acro_override){
 	}else if(aux[RACEMODE] && aux[HORIZON]){	//racemode with horizon behavior on roll axis	
 			float inclinationRoll	= attitude[0];
 			float inclinationPitch = attitude[1];
-			float inclinationMax;
-			if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
-					inclinationMax = fabsf(inclinationRoll);
-			}else{
-					inclinationMax = fabsf(inclinationPitch);}
+			uint32_t inclinationMaxBits = max_abs_bits_control_m0(inclinationRoll, inclinationPitch);
+			float inclinationMax = float_from_bits_control_m0(inclinationMaxBits);
 			float angleFade;
 			// constrains acroFade variable between 0 and 1
-			if (inclinationMax <= HORIZON_ANGLE_TRANSITION){
+			if (inclinationMaxBits <= float_bits_control_m0(HORIZON_ANGLE_TRANSITION)){
 					angleFade = inclinationMax/HORIZON_ANGLE_TRANSITION;
 			}else{
 					angleFade = 1;}
 			float stickFade;
-			float deflection = fabsf(rxcopy[0]);
-			if (deflection <= HORIZON_STICK_TRANSITION){
+			uint32_t deflectionBits = float_abs_bits_control_m0(rxcopy[0]);
+			float deflection = float_from_bits_control_m0(deflectionBits);
+			if (deflectionBits <= float_bits_control_m0(HORIZON_STICK_TRANSITION)){
 					stickFade = deflection/HORIZON_STICK_TRANSITION;
 			}else{
 					stickFade = 1;}
 			float fade = (stickFade *(1-HORIZON_SLIDER))+(HORIZON_SLIDER * angleFade);
 			// apply acro to roll for inverted behavior
-			if (GEstG[2] < 0 ){
+			if (inverted){
 					error[0] = rates[0] - gyro[0];
 					error[1] = rates[1] - gyro[1];
 			}else{ // apply a transitioning mix of acro and level behavior inside of stick HORIZON_TRANSITION point and full acro beyond stick HORIZON_TRANSITION point					
@@ -342,14 +434,11 @@ if (aux[LEVELMODE]&&!acro_override){
 			//pitch and roll
 			float inclinationRoll = attitude[0];
 			float inclinationPitch = attitude[1];
-			float inclinationMax;
-			if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
-				inclinationMax = fabsf(inclinationRoll);
-			}else{
-				inclinationMax = fabsf(inclinationPitch);}
+			uint32_t inclinationMaxBits = max_abs_bits_control_m0(inclinationRoll, inclinationPitch);
+			float inclinationMax = float_from_bits_control_m0(inclinationMaxBits);
 			float angleFade;
 			// constrains acroFade variable between 0 and 1
-			if (inclinationMax <= HORIZON_ANGLE_TRANSITION){
+			if (inclinationMaxBits <= float_bits_control_m0(HORIZON_ANGLE_TRANSITION)){
 				angleFade = inclinationMax/HORIZON_ANGLE_TRANSITION;
 			}else{
 				angleFade = 1;
@@ -357,15 +446,16 @@ if (aux[LEVELMODE]&&!acro_override){
 
 			for ( int i = 0 ; i <=1; i++){	
 					float stickFade;
-					float deflection = fabsf(rxcopy[i]);
-					if (deflection <= HORIZON_STICK_TRANSITION){
+					uint32_t deflectionBits = float_abs_bits_control_m0(rxcopy[i]);
+					float deflection = float_from_bits_control_m0(deflectionBits);
+					if (deflectionBits <= float_bits_control_m0(HORIZON_STICK_TRANSITION)){
 						stickFade = deflection/HORIZON_STICK_TRANSITION;
 					}else{
 						stickFade = 1;
 					}
 					float fade = (stickFade *(1-HORIZON_SLIDER))+(HORIZON_SLIDER * angleFade);
 					// apply acro to roll and pitch sticks for inverted behavior
-					if (GEstG[2] < 0 ){
+					if (inverted){
 						error[i] = rates[i] - gyro[i];
 					}else{ // apply a transitioning mix of acro and level behavior inside of stick HORIZON_TRANSITION point and full acro beyond stick HORIZON_TRANSITION point					
 						angleerror[i] = errorvect[i] ;

@@ -327,6 +327,77 @@ static inline uint32_t float_bits_m0(float value)
 	return bits.u;
 }
 
+// Exact two-entry cache for 0.0032f / looptime.  The key is the complete
+// IEEE-754 looptime bit pattern, so a hit can only reuse the result of the
+// exact same input.  A miss executes the original division unchanged.
+static float timefactor_cached_m0(float loop_seconds)
+{
+	static uint32_t key[2];
+	static float value[2];
+	static uint8_t valid_mask;
+	static uint8_t replace_slot;
+	uint32_t bits = float_bits_m0(loop_seconds);
+
+	if ((valid_mask & 1U) && key[0] == bits)
+		return value[0];
+	if ((valid_mask & 2U) && key[1] == bits)
+		return value[1];
+
+	float result = 0.0032f / loop_seconds;
+	uint8_t slot = replace_slot;
+	key[slot] = bits;
+	value[slot] = result;
+	valid_mask |= (uint8_t)(1U << slot);
+	replace_slot ^= 1U;
+	return result;
+}
+
+#ifdef ADVANCED_PID_CONTROLLER
+// The advanced D transition factor depends only on these three float values.
+// RX is ~200 Hz while pid() is 1 kHz, so most calls see exactly the same bit
+// patterns.  Cache the already-rounded result and run the original arithmetic
+// verbatim on a miss.  Including the gain values in the key keeps this safe if
+// they are ever changed at runtime.
+static float transition_setpoint_factor_cached_m0(int axis, float rx_value,
+		float stickAccelerator, float stickTransition)
+{
+	static uint32_t rx_key[PIDNUMBER];
+	static uint32_t accelerator_key[PIDNUMBER];
+	static uint32_t transition_key[PIDNUMBER];
+	static float cached[PIDNUMBER];
+	static uint8_t valid_mask;
+	uint8_t axis_mask = (uint8_t)(1U << axis);
+	uint32_t rx_bits = float_bits_m0(rx_value);
+	uint32_t accelerator_bits = float_bits_m0(stickAccelerator);
+	uint32_t transition_bits = float_bits_m0(stickTransition);
+
+	if ((valid_mask & axis_mask) &&
+		rx_key[axis] == rx_bits &&
+		accelerator_key[axis] == accelerator_bits &&
+		transition_key[axis] == transition_bits)
+		return cached[axis];
+
+	float result;
+	if (stickAccelerator < 1.0f)
+	  {
+		result = stickAccelerator *
+			((fabsf(rx_value) * stickTransition) + (1.0f - stickTransition));
+	  }
+	else
+	  {
+		result = (fabsf(rx_value) * stickTransition) +
+			(stickAccelerator * (1.0f - stickTransition));
+	  }
+
+	rx_key[axis] = rx_bits;
+	accelerator_key[axis] = accelerator_bits;
+	transition_key[axis] = transition_bits;
+	cached[axis] = result;
+	valid_mask |= axis_mask;
+	return result;
+}
+#endif
+
 // pid calculation for acro ( rate ) mode
 // input: error[x] = setpoint - gyro
 // output: pidoutput[x] = change required from motors
@@ -439,17 +510,8 @@ float pid(int x )
             stickTransition = stickTransitionProfileA[x];
         }
 
-        // This is stickAccelerator * transitionSetpointWeight with the
-        // division removed. It is algebraically identical on both branches.
-        if (stickAccelerator < 1.0f){
-            transitionSetpointFactor =
-                stickAccelerator * ((fabsf(rxcopy[x]) * stickTransition) +
-                                    (1.0f - stickTransition));
-        }else{
-            transitionSetpointFactor =
-                (fabsf(rxcopy[x]) * stickTransition) +
-                (stickAccelerator * (1.0f - stickTransition));
-        }
+        transitionSetpointFactor = transition_setpoint_factor_cached_m0(
+            x, rxcopy[x], stickAccelerator, stickTransition);
         static float lastrate[3];
 				static float lastsetpoint[3];
         static float dlpf[3] = {0};
@@ -487,17 +549,8 @@ float pid(int x )
             stickTransition = stickTransitionProfileA[x];
         }
 
-        // This is stickAccelerator * transitionSetpointWeight with the
-        // division removed. It is algebraically identical on both branches.
-        if (stickAccelerator < 1.0f){
-            transitionSetpointFactor =
-                stickAccelerator * ((fabsf(rxcopy[x]) * stickTransition) +
-                                    (1.0f - stickTransition));
-        }else{
-            transitionSetpointFactor =
-                (fabsf(rxcopy[x]) * stickTransition) +
-                (stickAccelerator * (1.0f - stickTransition));
-        }
+        transitionSetpointFactor = transition_setpoint_factor_cached_m0(
+            x, rxcopy[x], stickAccelerator, stickTransition);
         static float lastrate[3];
 				static float lastsetpoint[3];
         float lpf2( float in, int num);
@@ -524,7 +577,7 @@ return pidoutput[x];
 // this is called in advance as an optimization because it has division
 void pid_precalc()
 {
-	timefactor = 0.0032f / looptime;
+	timefactor = timefactor_cached_m0(looptime);
 	
 #ifdef PID_VOLTAGE_COMPENSATION
 	extern float lipo_cell_count;
