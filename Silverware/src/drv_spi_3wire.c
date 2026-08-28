@@ -9,6 +9,8 @@
 
 GPIO_InitTypeDef mosi_init_struct;
 int mosi_out = 0;
+static uint32_t mosi_mode_mask;
+static uint32_t mosi_mode_output;
 
 void spi_init(void)
 {    
@@ -37,6 +39,27 @@ void spi_init(void)
   mosi_init_struct.GPIO_Speed = GPIO_Speed_50MHz;
 	
 	GPIO_Init(SPI_MOSI_PORT, &mosi_init_struct);
+
+		// GPIO_Init() is intentionally used only at startup.  Cache the two MODER
+		// bits for this one-hot pin so runtime 3-wire direction changes are a
+		// single register read/modify/write instead of a generic 16-pin scan.
+		uint32_t pinpos = 0;
+		uint32_t pinmask = (uint32_t)SPI_MOSI_PIN;
+		while ((pinmask & 1U) == 0U)
+			{
+				pinmask >>= 1;
+				pinpos++;
+			}
+		uint32_t mode_shift = pinpos * 2U;
+		mosi_mode_mask = 3U << mode_shift;
+		mosi_mode_output = 1U << mode_shift;
+
+		// GPIO_Init does not configure speed/output type while the pin is input,
+		// so establish the intended output properties once here.
+		SPI_MOSI_PORT->OSPEEDR =
+				(SPI_MOSI_PORT->OSPEEDR & ~mosi_mode_mask) |
+				((uint32_t)GPIO_Speed_50MHz << mode_shift);
+		SPI_MOSI_PORT->OTYPER &= ~((uint32_t)SPI_MOSI_PIN);
 	
 	//mosi_out = 0; // already
 	
@@ -51,8 +74,7 @@ void mosi_input( void)
 	if ( mosi_out)
 	{
 	mosi_out = 0;
-	mosi_init_struct.GPIO_Mode = GPIO_Mode_IN;
-    GPIO_Init(SPI_MOSI_PORT, &mosi_init_struct); 
+        SPI_MOSI_PORT->MODER &= ~mosi_mode_mask;
 	}
 	
 }
@@ -62,8 +84,8 @@ void mosi_output( void)
 	if ( !mosi_out)
 	{
 	mosi_out = 1;
-	mosi_init_struct.GPIO_Mode = GPIO_Mode_OUT;
-    GPIO_Init(SPI_MOSI_PORT, &mosi_init_struct);	
+        SPI_MOSI_PORT->MODER =
+            (SPI_MOSI_PORT->MODER & ~mosi_mode_mask) | mosi_mode_output;
 	}
 	
 }

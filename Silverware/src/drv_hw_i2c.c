@@ -188,7 +188,7 @@ int hw_i2c_sendheader( int reg, int bytes)
 
 unsigned int i2c_timeout = 0;
 //check i2c ready	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY) == SET)
+while((I2C1->ISR & I2C_ISR_BUSY) != 0U)
 	{
 		i2c_timeout++;
 		if(I2C_CONDITION)
@@ -203,7 +203,7 @@ I2C_TransferHandling(I2C1, HW_I2C_ADDRESS<<1, bytes, I2C_SoftEnd_Mode, I2C_Gener
 	
 //i2c_timeout = 0;
 // wait for address to be sent	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TXIS) == RESET)
+while((I2C1->ISR & I2C_ISR_TXIS) == 0U)
 		{
 		i2c_timeout++;
 		if(I2C_CONDITION)
@@ -218,7 +218,7 @@ I2C1->TXDR = (uint8_t)reg;
 	
 //i2c_timeout = 0;
 // wait until last data sent
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TXE) == RESET)
+while((I2C1->ISR & I2C_ISR_TXE) == 0U)
 	{
 	i2c_timeout++;
 		if(I2C_CONDITION)
@@ -243,7 +243,7 @@ hw_i2c_sendheader( reg,2 );
 // send register value
 I2C1->TXDR = (uint8_t)data;
 // wait for finish	
-while(I2C_GetFlagStatus(I2C1, I2C_FLAG_TC) == RESET)
+while((I2C1->ISR & I2C_ISR_TC) == 0U)
 	{
 	i2c_timeout++;
 		if(I2C_CONDITION)
@@ -278,7 +278,7 @@ I2C_TransferHandling(I2C1, HW_I2C_ADDRESS<<1 , size, I2C_AutoEnd_Mode, I2C_Gener
 for(int i = 0; i<size; i++)
 	{
 	i2c_timeout = 0;	
-	while(I2C_GetFlagStatus(I2C1, I2C_FLAG_RXNE) == RESET)
+	while((I2C1->ISR & I2C_ISR_RXNE) == 0U)
 		{
 		i2c_timeout++;
 		if(I2C_CONDITION)

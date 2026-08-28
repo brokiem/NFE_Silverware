@@ -520,6 +520,7 @@ static void telemetry_write_system(int *txdata)
         telemetry_loop_work_sum_us = 0;
         telemetry_loop_time_max_us = 0;
         telemetry_loop_samples = 0;
+        telemetry_loop_overruns = 0;
       }
     else
       {

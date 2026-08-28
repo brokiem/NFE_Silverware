@@ -372,8 +372,9 @@ float pid(int x )
     
     
     #ifdef ENABLE_SETPOINT_WEIGHTING
-    // P term with setpoint weighting factored
-    pidoutput[x] = (error[x] * b[x] - (1.0f - b[x]) * gyro[x]) * pidkp[x];
+    // Algebraically identical for Acro, Level, Race and Horizon:
+    // b*error - (1-b)*gyro == b*(error + gyro) - gyro.
+    pidoutput[x] = ((error[x] + gyro[x]) * b[x] - gyro[x]) * pidkp[x];
     #else
     // P term with b disabled
     pidoutput[x] = error[x] * pidkp[x];
@@ -399,27 +400,35 @@ float pid(int x )
         
         #if (defined DTERM_LPF_1ST_HZ && defined ADVANCED_PID_CONTROLLER)
 				extern float rxcopy[4];		
-        float dterm;		
-				float transitionSetpointWeight[3];
-				float stickAccelerator[3];
-				float stickTransition[3];
-			if (aux[PIDPROFILE]){
-				stickAccelerator[x] = stickAcceleratorProfileB[x];
-				stickTransition[x] = stickTransitionProfileB[x];
-			}else{
-				stickAccelerator[x] = stickAcceleratorProfileA[x];
-				stickTransition[x] = stickTransitionProfileA[x];
-			}				
-				if (stickAccelerator[x] < 1){
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * stickTransition[x]) + (1- stickTransition[x]);
-				}else{
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] / stickAccelerator[x])) + (1- stickTransition[x]);	
-				}
+        float dterm;
+        float stickAccelerator;
+        float stickTransition;
+        float transitionSetpointFactor;
+
+        if (aux[PIDPROFILE]){
+            stickAccelerator = stickAcceleratorProfileB[x];
+            stickTransition = stickTransitionProfileB[x];
+        }else{
+            stickAccelerator = stickAcceleratorProfileA[x];
+            stickTransition = stickTransitionProfileA[x];
+        }
+
+        // This is stickAccelerator * transitionSetpointWeight with the
+        // division removed. It is algebraically identical on both branches.
+        if (stickAccelerator < 1.0f){
+            transitionSetpointFactor =
+                stickAccelerator * ((fabsf(rxcopy[x]) * stickTransition) +
+                                    (1.0f - stickTransition));
+        }else{
+            transitionSetpointFactor =
+                (fabsf(rxcopy[x]) * stickTransition) +
+                (stickAccelerator * (1.0f - stickTransition));
+        }
         static float lastrate[3];
 				static float lastsetpoint[3];
         static float dlpf[3] = {0};
         
-						dterm = (((setpoint[x] - lastsetpoint[x]) * stickAccelerator[x] * transitionSetpointWeight[x]) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
+                        dterm = (((setpoint[x] - lastsetpoint[x]) * transitionSetpointFactor) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
 						lastsetpoint[x] = setpoint [x];
 						lastrate[x] = gyro[x];	
 						lpf( &dlpf[x], dterm, FILTERCALC( 0.001 , 1.0f/DTERM_LPF_1ST_HZ ) );
@@ -439,27 +448,35 @@ float pid(int x )
 
 				#if (defined DTERM_LPF_2ND_HZ && defined ADVANCED_PID_CONTROLLER)
 				extern float rxcopy[4];		
-        float dterm;		
-				float transitionSetpointWeight[3];
-				float stickAccelerator[3];
-				float stickTransition[3];
-			if (aux[PIDPROFILE]){
-				stickAccelerator[x] = stickAcceleratorProfileB[x];
-				stickTransition[x] = stickTransitionProfileB[x];
-			}else{
-				stickAccelerator[x] = stickAcceleratorProfileA[x];
-				stickTransition[x] = stickTransitionProfileA[x];
-			}				
-				if (stickAccelerator[x] < 1){
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * stickTransition[x]) + (1- stickTransition[x]);
-				}else{
-				transitionSetpointWeight[x] = (fabsf(rxcopy[x]) * (stickTransition[x] / stickAccelerator[x])) + (1- stickTransition[x]);	
-				}
+        float dterm;
+        float stickAccelerator;
+        float stickTransition;
+        float transitionSetpointFactor;
+
+        if (aux[PIDPROFILE]){
+            stickAccelerator = stickAcceleratorProfileB[x];
+            stickTransition = stickTransitionProfileB[x];
+        }else{
+            stickAccelerator = stickAcceleratorProfileA[x];
+            stickTransition = stickTransitionProfileA[x];
+        }
+
+        // This is stickAccelerator * transitionSetpointWeight with the
+        // division removed. It is algebraically identical on both branches.
+        if (stickAccelerator < 1.0f){
+            transitionSetpointFactor =
+                stickAccelerator * ((fabsf(rxcopy[x]) * stickTransition) +
+                                    (1.0f - stickTransition));
+        }else{
+            transitionSetpointFactor =
+                (fabsf(rxcopy[x]) * stickTransition) +
+                (stickAccelerator * (1.0f - stickTransition));
+        }
         static float lastrate[3];
 				static float lastsetpoint[3];
         float lpf2( float in, int num);
   
-						dterm = (((setpoint[x] - lastsetpoint[x]) * stickAccelerator[x] * transitionSetpointWeight[x]) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
+                        dterm = (((setpoint[x] - lastsetpoint[x]) * transitionSetpointFactor) - (gyro[x] - lastrate[x])) * pidkd[x] * timefactor;
 						lastsetpoint[x] = setpoint [x];
 						lastrate[x] = gyro[x];	
             dterm = lpf2(  dterm, x );
@@ -485,7 +502,17 @@ void pid_precalc()
 	
 #ifdef PID_VOLTAGE_COMPENSATION
 	extern float lipo_cell_count;
-	v_compensation = mapf ( (vbattfilt/lipo_cell_count) , 2.5 , 3.85 , PID_VC_FACTOR , 1.00);
+    float cell_voltage;
+#ifdef LIPO_CELL_COUNT
+    // Compile-time cell count: avoid the runtime divide entirely.
+    cell_voltage = vbattfilt * (1.0f / (float)LIPO_CELL_COUNT);
+#else
+    cell_voltage = vbattfilt / lipo_cell_count;
+#endif
+    // Same linear map as mapf(cell_voltage, 2.5, 3.85, PID_VC_FACTOR, 1.0),
+    // but with a compile-time constant denominator.
+    v_compensation = (cell_voltage - 2.5f) *
+        ((1.0f - PID_VC_FACTOR) / (3.85f - 2.5f)) + PID_VC_FACTOR;
 	if( v_compensation > PID_VC_FACTOR) v_compensation = PID_VC_FACTOR;
 	if( v_compensation < 1.00f) v_compensation = 1.00;
 	#ifdef LEVELMODE_PID_ATTENUATION

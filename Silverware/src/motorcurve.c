@@ -10,10 +10,12 @@ float motormap(float input)
     // boldclash f03 with 716 motors ant 4 blade prop
 	// a*x^2 + b*x + c
 
+#if !defined(MOTOR_MIN_COMMAND) || defined(BRUSHLESS_TARGET)
 	if (input > 1)
 		input = 1;
 	if (input < 0)
 		input = 0;
+#endif
 
 	input = input * input * 0.51f + input * (0.44f);
 	input += 0.05f;

@@ -106,15 +106,20 @@ void vectorcopy(float *vector1, float *vector2);
 
 float atan2approx(float y, float x);
 
+static float calcinvmagnitude(float vector[3])
+{
+    float mag2 = 0.0f;
+    for (uint8_t axis = 0; axis < 3; axis++)
+      {
+        mag2 += vector[axis] * vector[axis];
+      }
+    return Q_rsqrt(mag2);
+}
+
 float calcmagnitude(float vector[3])
 {
-	float accmag = 0;
-	for (uint8_t axis = 0; axis < 3; axis++)
-	  {
-		  accmag += vector[axis] * vector[axis];
-	  }
-	accmag = 1.0f/Q_rsqrt(accmag);
-	return accmag;
+	// Keep the public helper's existing behavior for any out-of-file callers.
+	return 1.0f / calcinvmagnitude(vector);
 }
 
 
@@ -176,12 +181,14 @@ void imu_calc(void)
 //extern float stickvector[3];
 extern int onground;
   if(onground){		//happyhour bartender - quad is ON GROUND and disarmed
-	  // calc acc mag
-	  float accmag = calcmagnitude(&accel[0]);
-  	  if ((accmag > ACC_MIN * ACC_1G) && (accmag < ACC_MAX * ACC_1G)) {
-  		  // normalize acc
+	  // Work in reciprocal magnitude domain so normalization does not
+      // calculate a magnitude only to divide by it again.
+      float accinvmag = calcinvmagnitude(&accel[0]);
+      if ((accinvmag > (1.0f / (ACC_MAX * ACC_1G))) &&
+          (accinvmag < (1.0f / (ACC_MIN * ACC_1G)))) {
+          float accscale = ACC_1G * accinvmag;
   		  for (int axis = 0; axis < 3; axis++) {
-  			  accel[axis] = accel[axis] * (ACC_1G / accmag);
+		  	accel[axis] = accel[axis] * accscale;
   		  }
 
   		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FASTFILTER);
@@ -199,13 +206,13 @@ extern int onground;
 			accel[x] = accel_filt[x];
 	  }
 		#endif
-	  // calc mag of filtered acc
-	  float accmag = calcmagnitude(&accel[0]);
-//	  float stickmag = calcmagnitude(&stickvector[0]);
-  	  if ((accmag > ACC_MIN * ACC_1G) && (accmag < ACC_MAX * ACC_1G)){//The bartender makes the fusion if..... 
-  		  // normalize acc
+	  // calc reciprocal magnitude of filtered acc
+      float accinvmag = calcinvmagnitude(&accel[0]);
+      if ((accinvmag > (1.0f / (ACC_MAX * ACC_1G))) &&
+          (accinvmag < (1.0f / (ACC_MIN * ACC_1G)))){//The bartender makes the fusion if.....
+          float accscale = ACC_1G * accinvmag;
   		  for (int axis = 0; axis < 3; axis++) {
-  			  accel[axis] = accel[axis] * (ACC_1G / accmag);
+		  	accel[axis] = accel[axis] * accscale;
   		  }
   		  // filter accel on to GEstG
   		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FILTERTIME);
@@ -213,9 +220,9 @@ extern int onground;
   			  lpf(&GEstG[x], accel[x], filtcoeff);
   		  }
   		  //heal the gravity vector after nudging it with accel (this is the fix for the yaw slow down bug some FC experienced)
-  		  float GEstGmag = calcmagnitude(&GEstG[0]);
+		  float GEstGscale = ACC_1G * calcinvmagnitude(&GEstG[0]);
   		  for (int axis = 0; axis < 3; axis++) {
-  			  GEstG[axis] = GEstG[axis] * (ACC_1G / GEstGmag);
+			  GEstG[axis] = GEstG[axis] * GEstGscale;
   		  }
   	  }
   }
@@ -230,7 +237,7 @@ if (aux[HORIZON]){
 
 
 
-#define M_PI  3.14159265358979323846	/* pi */
+#define M_PI  3.14159265358979323846f	/* pi -- keep all atan2approx math in float */
 
 
 #define OCTANTIFY(_x, _y, _o)   do {                            \
@@ -255,10 +262,10 @@ float atan2approx(float y, float x)
 
 	t = (y / x);
 	// atan function for 0 - 1 interval
-	dphi = t*( ( M_PI/4 + 0.2447f ) + t *( ( -0.2447f + 0.0663f ) + t*( - 0.0663f)) );
-	phi *= M_PI / 4;
+	dphi = t*( ( M_PI/4.0f + 0.2447f ) + t *( ( -0.2447f + 0.0663f ) + t*( - 0.0663f)) );
+	phi *= M_PI / 4.0f;
 	dphi = phi + dphi;
-	if (dphi > (float) M_PI)
-		dphi -= 2 * M_PI;
+	if (dphi > M_PI)
+		dphi -= 2.0f * M_PI;
 	return RADTODEG * dphi;
 }

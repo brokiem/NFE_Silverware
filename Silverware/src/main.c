@@ -305,12 +305,12 @@ if ( liberror )
 
 	while(1)
 	{ 
-		// gettime() needs to be called at least once per second 
-		unsigned long time = gettime(); 
-		looptime = ((uint32_t)( time - lastlooptime));
-		if ( looptime <= 0 ) looptime = 1;
-		looptime = looptime * 1e-6f;
-		if ( looptime > 0.02f ) // max loop 20ms
+		// gettime() needs to be called at least once per second
+		unsigned long time = gettime();
+        uint32_t loop_us = (uint32_t)(time - lastlooptime);
+        if (loop_us == 0U) loop_us = 1U;
+        looptime = (float)loop_us * 1e-6f;
+		if ( loop_us > 20000U ) // max loop 20ms
 		{
 			failloop( 6);	
 			//endless loop			
@@ -323,10 +323,9 @@ if ( liberror )
 		lastlooptime = time;
 
 #ifdef RX_BAYANG_EXTENDED_TELEMETRY
-		uint32_t telemetry_loop_us = (uint32_t)(looptime * 1000000.0f + 0.5f);
-		telemetry_loop_time_sum_us += telemetry_loop_us;
-		if (telemetry_loop_us > telemetry_loop_time_max_us)
-			telemetry_loop_time_max_us = telemetry_loop_us > 65535U ? 65535U : telemetry_loop_us;
+		telemetry_loop_time_sum_us += loop_us;
+		if (loop_us > telemetry_loop_time_max_us)
+			telemetry_loop_time_max_us = loop_us > 65535U ? 65535U : (uint16_t)loop_us;
 		if (telemetry_loop_samples < 65535U)
 			telemetry_loop_samples++;
 #endif
