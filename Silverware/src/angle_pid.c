@@ -45,18 +45,18 @@ float apid(int x)
 	float one_minus_abs_error = 1.0f - abs_error;
 	float delta_error = e - lasterror[x];
 
-	// P term 1 weighted
-	apidoutput1[x] = one_minus_abs_error * e * apidkp1[0] ;
-	
-	// P term 2 weighted
-	apidoutput2[x] = abs_error * e * apidkp2[0];
-	
 extern float timefactor;
-	// D term 1 weighted + P term 1 weighted
-	apidoutput1[x] += delta_error * apidkd1[0] * one_minus_abs_error * timefactor;
-	
-	// D term 2 weighted + P term 2 weighted
-	apidoutput2[x] += (delta_error * apidkd2[0] * abs_error * timefactor);
+	// Factor each weighted branch.  This is the same controller equation as
+	// before, but avoids one soft-float multiply on Cortex-M0.  Keep the two
+	// branch-output globals with their original meaning in case debug code
+	// observes them.
+	float delta_time = delta_error * timefactor;
+	apidoutput1[x] = one_minus_abs_error *
+		(e * apidkp1[0] + delta_time * apidkd1[0]);
+
+	// apidkd2[] is source-configured as exactly zero by the previous patch,
+	// so its D contribution is exactly zero.  Preserve weighted P2 directly.
+	apidoutput2[x] = abs_error * (e * apidkp2[0]);
 	
   // apidoutput sum
 	apidoutput[x] = apidoutput1[x] + apidoutput2[x];

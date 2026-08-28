@@ -247,35 +247,52 @@ telemetry_attitude_horizon_state = (uint8_t)horizon_active;
 
 
 
-#define M_PI  3.14159265358979323846f	/* pi -- keep all atan2approx math in float */
-
-
-#define OCTANTIFY(_x, _y, _o)   do {                            \
-    float _t;                                                   \
-    _o= 0;                                                \
-    if(_y<  0)  {            _x= -_x;   _y= -_y; _o += 4; }     \
-    if(_x<= 0)  { _t= _x;    _x=  _y;   _y= -_t; _o += 2; }     \
-    if(_x<=_y)  { _t= _y-_x; _x= _x+_y; _y=  _t; _o += 1; }     \
-} while(0);
-
 // +-0.09 deg error
 float atan2approx(float y, float x)
 {
-
-	if (x == 0)
+	// Keep the original x==0 behavior, including signed zero.
+	if (x == 0.0f)
 		x = 123e-15f;
-	float phi = 0;
-	float dphi;
-	float t;
 
-	OCTANTIFY(x, y, phi);
+	// The old implementation kept the octant number in a float, repeatedly
+	// added 1/2/4 to it, converted that to radians, then multiplied the whole
+	// answer back to degrees.  The octant itself is integer state, so keep it
+	// integer and use an exact degree lookup.  This removes soft-float work
+	// without changing any octant decision.
+	unsigned int octant = 0U;
+	float temp;
+	if (y < 0.0f)
+	  {
+		x = -x;
+		y = -y;
+		octant += 4U;
+	  }
+	if (x <= 0.0f)
+	  {
+		temp = x;
+		x = y;
+		y = -temp;
+		octant += 2U;
+	  }
+	if (x <= y)
+	  {
+		temp = y - x;
+		x = x + y;
+		y = temp;
+		octant += 1U;
+	  }
 
-	t = (y / x);
-	// atan function for 0 - 1 interval
-	dphi = t*( ( M_PI/4.0f + 0.2447f ) + t *( ( -0.2447f + 0.0663f ) + t*( - 0.0663f)) );
-	phi *= M_PI / 4.0f;
-	dphi = phi + dphi;
-	if (dphi > M_PI)
-		dphi -= 2.0f * M_PI;
-	return RADTODEG * dphi;
+	static const float octant_degrees[8] = {
+		0.0f, 45.0f, 90.0f, 135.0f,
+		180.0f, 225.0f, 270.0f, 315.0f
+	};
+
+	float t = y / x;
+	// Same polynomial as before, with its constants pre-scaled to degrees.
+	float angle = t * (59.02028f +
+		t * (-10.221568f + t * -3.79871f));
+	angle += octant_degrees[octant];
+	if (angle > 180.0f)
+		angle -= 360.0f;
+	return angle;
 }

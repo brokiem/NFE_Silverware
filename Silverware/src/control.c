@@ -276,11 +276,13 @@ if (aux[LEVELMODE]&&!acro_override){
 	}else if(aux[RACEMODE] && aux[HORIZON]){	//racemode with horizon behavior on roll axis	
 			float inclinationRoll	= attitude[0];
 			float inclinationPitch = attitude[1];
+			float absInclinationRoll = fabsf(inclinationRoll);
+			float absInclinationPitch = fabsf(inclinationPitch);
 			float inclinationMax;
-			if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
-					inclinationMax = fabsf(inclinationRoll);
+			if (absInclinationRoll >= absInclinationPitch){
+					inclinationMax = absInclinationRoll;
 			}else{
-					inclinationMax = fabsf(inclinationPitch);}
+					inclinationMax = absInclinationPitch;}
 			float angleFade;
 			// constrains acroFade variable between 0 and 1
 			if (inclinationMax <= HORIZON_ANGLE_TRANSITION){
@@ -313,11 +315,13 @@ if (aux[LEVELMODE]&&!acro_override){
 			//pitch and roll
 			float inclinationRoll = attitude[0];
 			float inclinationPitch = attitude[1];
+			float absInclinationRoll = fabsf(inclinationRoll);
+			float absInclinationPitch = fabsf(inclinationPitch);
 			float inclinationMax;
-			if (fabsf(inclinationRoll) >= fabsf(inclinationPitch)){
-				inclinationMax = fabsf(inclinationRoll);
+			if (absInclinationRoll >= absInclinationPitch){
+				inclinationMax = absInclinationRoll;
 			}else{
-				inclinationMax = fabsf(inclinationPitch);}
+				inclinationMax = absInclinationPitch;}
 			float angleFade;
 			// constrains acroFade variable between 0 and 1
 			if (inclinationMax <= HORIZON_ANGLE_TRANSITION){

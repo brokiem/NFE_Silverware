@@ -361,14 +361,29 @@ static int telemetry_was_flying;
 
 static void telemetry_write_bits(int *data, uint8_t *bit_offset, uint32_t value, uint8_t bit_count)
 {
-    for (int bit = bit_count - 1; bit >= 0; bit--)
+    // Write the same MSB-first bitstream as the original routine, but consume
+    // as many bits as fit in the current destination byte.  The old code ran
+    // one loop iteration per payload bit (up to 96 iterations per page).
+    // Here each iteration consumes 1..8 bits and never shifts by >=32.
+    uint8_t offset = *bit_offset;
+
+    while (bit_count > 0U)
       {
-        uint8_t byte_index = 2 + (*bit_offset >> 3);
-        uint8_t byte_bit = 7 - (*bit_offset & 7);
-        if (value & (1UL << bit))
-            data[byte_index] |= 1 << byte_bit;
-        (*bit_offset)++;
+        uint8_t byte_index = 2U + (offset >> 3);
+        uint8_t used = offset & 7U;
+        uint8_t room = 8U - used;
+        uint8_t take = bit_count < room ? bit_count : room;
+        uint8_t source_shift = bit_count - take;
+        uint32_t mask = (1UL << take) - 1UL;
+
+        data[byte_index] |= (int)(((value >> source_shift) & mask)
+                                  << (room - take));
+
+        offset += take;
+        bit_count -= take;
       }
+
+    *bit_offset = offset;
 }
 
 static uint32_t telemetry_signed(float value, float resolution, uint8_t bits)
@@ -587,6 +602,14 @@ void send_telemetry()
 {
 
     int txdata[15];
+
+#ifdef RX_BAYANG_EXTENDED_TELEMETRY
+    // Extended V1 initializes bytes 0..13 itself.  Previously we formatted a
+    // complete legacy telemetry packet first (including two float battery
+    // conversions and a 15-element initialization loop), then immediately
+    // overwrote it here.  Skip that dead work entirely.
+    telemetry_write_extended_packet(txdata);
+#else
     for (int i = 0; i < 15; i++)
         txdata[i] = i;
     txdata[0] = 133;
@@ -610,9 +633,6 @@ void send_telemetry()
 
     if (lowbatt)
         txdata[3] |= (1 << 3);
-
-#ifdef RX_BAYANG_EXTENDED_TELEMETRY
-    telemetry_write_extended_packet(txdata);
 #endif
 
     int sum = 0;
