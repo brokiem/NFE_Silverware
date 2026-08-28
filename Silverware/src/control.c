@@ -107,6 +107,28 @@ float underthrottlefilt = 0;
 
 float rxcopy[4];
 
+#if defined(MOTOR_MIN_COMMAND) && !defined(BRUSHLESS_TARGET)
+static inline float clip01f_m0(float input)
+{
+	// Bit-exact equivalent of the two original [0,1] float comparisons.
+	union { float f; uint32_t u; } value;
+	value.f = input;
+	uint32_t magnitude = value.u & 0x7fffffffU;
+
+	if (magnitude > 0x7f800000U) // NaN: both original comparisons are false
+		return input;
+	if (value.u & 0x80000000U)
+	  {
+		if (magnitude != 0U)
+			return 0.0f;
+		return input; // preserve -0.0f exactly
+	  }
+	if (value.u > 0x3f800000U) // +1.0f
+		return 1.0f;
+	return input;
+}
+#endif
+
 #ifdef BETAFLIGHT_RATES
 #define SETPOINT_RATE_LIMIT 1998.0f
 #define RC_RATE_INCREMENTAL 14.54f
@@ -150,21 +172,15 @@ static float calcBFRatesRad(int axis)
 void control( void)
 {	
 
-// high-low rates switch 
-float rate_multiplier = 1.0;
-
+// high-low rates switch
 #if (defined USE_ANALOG_AUX && defined ANALOG_RATE_MULT)
-	rate_multiplier = aux_analog[ANALOG_RATE_MULT];
-#else
-	if ( aux[RATES]  )
-	{		
-		
-	}
-	else
-	{
+float rate_multiplier = aux_analog[ANALOG_RATE_MULT];
+#elif (RATES != CHAN_ON)
+float rate_multiplier = 1.0f;
+	if (!aux[RATES])
+	  {
 		rate_multiplier = LOW_RATES_MULTI;
-	}
-	// make local copy
+	  }
 #endif
 	
 #ifdef INVERTED_ENABLE	
@@ -225,13 +241,26 @@ pid_precalc();
 	float rates[3];
 
 #ifndef BETAFLIGHT_RATES
+#if (defined USE_ANALOG_AUX && defined ANALOG_RATE_MULT) || (RATES != CHAN_ON)
     rates[0] = rate_multiplier * rxcopy[0] * (float) MAX_RATE * DEGTORAD;
     rates[1] = rate_multiplier * rxcopy[1] * (float) MAX_RATE * DEGTORAD;
     rates[2] = rate_multiplier * rxcopy[2] * (float) MAX_RATEYAW * DEGTORAD;
 #else
+    // RATES is the permanent CHAN_ON channel in this build.
+    rates[0] = rxcopy[0] * (float) MAX_RATE * DEGTORAD;
+    rates[1] = rxcopy[1] * (float) MAX_RATE * DEGTORAD;
+    rates[2] = rxcopy[2] * (float) MAX_RATEYAW * DEGTORAD;
+#endif
+#else
+#if (defined USE_ANALOG_AUX && defined ANALOG_RATE_MULT) || (RATES != CHAN_ON)
     rates[0] = rate_multiplier * calcBFRatesRad(0);
     rates[1] = rate_multiplier * calcBFRatesRad(1);
     rates[2] = rate_multiplier * calcBFRatesRad(2);
+#else
+    rates[0] = calcBFRatesRad(0);
+    rates[1] = calcBFRatesRad(1);
+    rates[2] = calcBFRatesRad(2);
+#endif
 #endif
         
 if (aux[LEVELMODE]&&!acro_override){
@@ -991,8 +1020,7 @@ thrsum = 0;		//reset throttle sum for voltage monitoring logic in main loop
 		// do nothing - idle set by DSHOT
 		#else
 			float motor_min_value = (float) MOTOR_MIN_COMMAND * 0.01f;
-			if ( mix[i] < 0 ) mix[i] = 0;											//Clip all mixer values into 0 to 1 range before remapping
-			if ( mix[i] > 1 ) mix[i] = 1;	
+			mix[i] = clip01f_m0(mix[i]);
 			mix[i] = motor_min_value + mix[i] * (1.0f - motor_min_value);
 		#endif
 #endif  
@@ -1017,8 +1045,10 @@ thrsum = 0;		//reset throttle sum for voltage monitoring logic in main loop
 //***********************End Motor PWM Command Logic
 		
 //***********************Clip mmixer outputs (if not already done) before applying calculating throttle sum
+		#if !defined(MOTOR_MIN_COMMAND) || defined(BRUSHLESS_TARGET)
 		if ( mix[i] < 0 ) mix[i] = 0;
 		if ( mix[i] > 1 ) mix[i] = 1;
+		#endif
 		#ifdef RX_BAYANG_EXTENDED_TELEMETRY
 		telemetry_motor_output[i] = mix[i];
 		#endif

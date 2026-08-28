@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 
 #include <math.h>
+#include <inttypes.h>
 #include "util.h"
 #include "drv_time.h"
 
@@ -66,6 +67,36 @@ void lpf( float *out, float in , float coeff)
 
 void limitf ( float *input , const float limit)
 {
+	/*
+	 * Cortex-M0 has no FPU, so the two ordinary float comparisons below are
+	 * software-library calls. Every hot-path caller in this build supplies a
+	 * positive finite limit. For that common case IEEE-754 magnitude ordering
+	 * lets us clamp using integer instructions only.
+	 *
+	 * Keep the original comparison implementation as a fallback for negative,
+	 * infinite or NaN limits so this utility retains its old edge semantics.
+	 */
+	union { float f; uint32_t u; } value;
+	union { float f; uint32_t u; } bound;
+	const uint32_t sign_bit = 0x80000000U;
+	const uint32_t magnitude_mask = 0x7fffffffU;
+	const uint32_t infinity_bits = 0x7f800000U;
+
+	value.f = *input;
+	bound.f = limit;
+	uint32_t bound_magnitude = bound.u & magnitude_mask;
+
+	if ((bound.u & sign_bit) == 0U && bound_magnitude < infinity_bits)
+	  {
+		uint32_t magnitude = value.u & magnitude_mask;
+		if (magnitude > bound_magnitude && magnitude <= infinity_bits)
+		  {
+			value.u = (value.u & sign_bit) | bound_magnitude;
+			*input = value.f;
+		  }
+		return;
+	  }
+
 	if (*input > limit) *input = limit;
 	if (*input < - limit) *input = - limit;		
 }
@@ -212,4 +243,3 @@ void print_str(const char *str)
 }
 
 #endif
-

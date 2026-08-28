@@ -141,10 +141,13 @@ float motormap(float input)
 {
 //      Hubsan 8.5mm motors and props 
 
+	// MOTOR_MIN_COMMAND already guarantees [motor_min,1] on brushed builds.
+#if !defined(MOTOR_MIN_COMMAND) || defined(BRUSHLESS_TARGET)
 	if (input > 1)
 		input = 1;
 	if (input < 0)
 		input = 0;
+#endif
 
 	input = input * input * 0.197f + input * (0.74f);
 	input += 0.067f;
@@ -152,4 +155,3 @@ float motormap(float input)
 	return input;
 }
 #endif
-

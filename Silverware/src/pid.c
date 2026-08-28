@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include "pid.h"
 #include "util.h"
 #include "led.h"
@@ -299,6 +300,33 @@ void apply_analog_aux_to_pids()
 }
 
 
+// Cortex-M0 has no hardware float compare. These helpers preserve IEEE-754
+// sign/NaN/zero behavior using integer instructions only.
+static inline int float_sign_nonzero_m0(float value)
+{
+	union { float f; uint32_t u; } bits;
+	bits.f = value;
+	uint32_t magnitude = bits.u & 0x7fffffffU;
+	if (magnitude == 0U || magnitude > 0x7f800000U)
+		return 0;
+	return (bits.u & 0x80000000U) ? -1 : 1;
+}
+
+static inline int float_abs_gt_01_m0(float value)
+{
+	union { float f; uint32_t u; } bits;
+	bits.f = value;
+	uint32_t magnitude = bits.u & 0x7fffffffU;
+	return magnitude > 0x3dcccccdU && magnitude <= 0x7f800000U;
+}
+
+static inline uint32_t float_bits_m0(float value)
+{
+	union { float f; uint32_t u; } bits;
+	bits.f = value;
+	return bits.u;
+}
+
 // pid calculation for acro ( rate ) mode
 // input: error[x] = setpoint - gyro
 // output: pidoutput[x] = change required from motors
@@ -327,22 +355,20 @@ float pid(int x )
 #endif
 		
     int iwindup = 0;
-    if (( pidoutput[x] == outlimit[x] )&& ( error[x] > 0) )
-    {
-        iwindup = 1;		
-    }
-    
-    if (( pidoutput[x] == -outlimit[x])&& ( error[x] < 0) )
-    {
-        iwindup = 1;				
-    } 
+    uint32_t pid_bits = float_bits_m0(pidoutput[x]);
+    uint32_t limit_bits = float_bits_m0(outlimit[x]);
+    int error_sign = float_sign_nonzero_m0(error[x]);
+
+    if (((pid_bits == limit_bits) && (error_sign > 0)) ||
+        ((pid_bits == (limit_bits ^ 0x80000000U)) && (error_sign < 0)))
+        iwindup = 1;
     
     #ifdef ANTI_WINDUP_DISABLE
     iwindup = 0;
     #endif
  
     #ifdef TRANSIENT_WINDUP_PROTECTION
-		if ( x < 2 && fabsf( setpoint[x] - avgSetpoint[x] ) > 0.1f ) {
+		if (x < 2 && float_abs_gt_01_m0(setpoint[x] - avgSetpoint[x])) {
 			iwindup = 1;
 		}
     #endif
@@ -385,7 +411,7 @@ float pid(int x )
 
     // D term
     // skip yaw D term if not set               
-    if ( pidkd[x] > 0 ){
+    if (float_sign_nonzero_m0(pidkd[x]) > 0){
 			
         #if (defined DTERM_LPF_1ST_HZ && !defined ADVANCED_PID_CONTROLLER)
         float dterm;

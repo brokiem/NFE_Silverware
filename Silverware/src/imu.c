@@ -195,7 +195,7 @@ extern int onground;
 		  	accel[axis] = accel[axis] * accscale;
   		  }
 
-  		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FASTFILTER);
+		  float filtcoeff = 1.0f - looptime * (1.0f / (float)FASTFILTER);
   		  for (int x = 0; x < 3; x++) {
   			  lpf(&GEstG[x], accel[x], filtcoeff);
   		  }
@@ -203,7 +203,7 @@ extern int onground;
   }else{		//lateshift bartender - quad is IN AIR and things are getting wild
 		#ifdef PREFILTER
 	  // hit accel[3] with a sledgehammer
-	  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)PREFILTER);
+	  float filtcoeff = 1.0f - looptime * (1.0f / (float)PREFILTER);
 	  for (int x = 0; x < 3; x++) {
 		  static float accel_filt[3];
 		  lpf(&accel_filt[x], accel[x], filtcoeff);
@@ -219,7 +219,7 @@ extern int onground;
 		  	accel[axis] = accel[axis] * accscale;
   		  }
   		  // filter accel on to GEstG
-  		  float filtcoeff = lpfcalc_hz(looptime, 1.0f / (float)FILTERTIME);
+		  float filtcoeff = 1.0f - looptime * (1.0f / (float)FILTERTIME);
   		  for (int x = 0; x < 3; x++) {
   			  lpf(&GEstG[x], accel[x], filtcoeff);
   		  }
