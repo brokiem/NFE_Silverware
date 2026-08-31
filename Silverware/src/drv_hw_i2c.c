@@ -39,7 +39,7 @@ THE SOFTWARE.
 
 
 // digital filter 0 - 15 ( 0 - off )
-#define HW_I2C_DIGITAL_FILTER 0
+#define HW_I2C_DIGITAL_FILTER 6
 
 
 // 100Khz (slow)
